@@ -98,8 +98,8 @@ Follow these instructions to set up and run the project on your local machine.
 
 1.  **Clone the Repository**
     ```bash
-    git clone <your-repo-url>
-    cd <repo-folder>
+    git clone https://github.com/violetarcher/agency-inc-demo.git
+    cd agency-inc-demo
     ```
 
 2.  **Create Environment File**
