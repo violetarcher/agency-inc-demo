@@ -7,9 +7,6 @@ export default withApiAuthRequired(async function handler(
   res: NextApiResponse
 ) {
   const session = await getSession(req, res);
-  // console.log('--- USER SESSION ---');
-  // console.log(JSON.stringify(session, null, 2));
-  // console.log('--------------------');
   const user = session?.user;
   const permissions = session?.accessTokenScope?.split(' ') || [];
 
@@ -39,6 +36,7 @@ export default withApiAuthRequired(async function handler(
         const newReport = {
           ...req.body,
           author: user?.name,
+          authorId: user?.sub, 
           createdAt: new Date().toISOString(),
         };
         const docRef = await reportsCollection.add(newReport);
@@ -48,19 +46,32 @@ export default withApiAuthRequired(async function handler(
       }
 
     case 'PUT':
-        if (!permissions.includes('edit:reports')) {
-          return res.status(403).json({ error: 'Forbidden' });
+      if (!permissions.includes('edit:reports')) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      if (!reportId) {
+          return res.status(400).json({ error: 'Report ID is required' });
+      }
+      try {
+        const reportRef = reportsCollection.doc(reportId);
+        const reportDoc = await reportRef.get();
+
+        if (!reportDoc.exists) {
+          return res.status(404).json({ error: 'Report not found' });
         }
-        if (!reportId) {
-            return res.status(400).json({ error: 'Report ID is required' });
+
+        const reportData = reportDoc.data();
+        
+        if (reportData?.authorId !== user?.sub) {
+          return res.status(403).json({ error: 'Forbidden: You can only edit your own reports.' });
         }
-        try {
-          const updatedData = { ...req.body, updatedAt: new Date().toISOString() };
-          await reportsCollection.doc(reportId).update(updatedData);
-          return res.status(200).json({ id: reportId, ...updatedData });
-        } catch (error) {
-          return res.status(500).json({ error: 'Failed to update report' });
-        }
+
+        const updatedData = { ...req.body, updatedAt: new Date().toISOString() };
+        await reportRef.update(updatedData);
+        return res.status(200).json({ id: reportId, ...updatedData });
+      } catch (error) {
+        return res.status(500).json({ error: 'Failed to update report' });
+      }
 
     case 'DELETE':
       if (!permissions.includes('delete:reports')) {
@@ -71,11 +82,11 @@ export default withApiAuthRequired(async function handler(
       }
       try {
         await reportsCollection.doc(reportId).delete();
-        return res.status(204).end(); // 204 No Content
+        return res.status(204).end();
       } catch (error) {
         return res.status(500).json({ error: 'Failed to delete report' });
       }
-
+      
     default:
       res.setHeader('Allow', ['GET', 'POST', 'PUT', 'DELETE']);
       res.status(405).end(`Method ${req.method} Not Allowed`);
