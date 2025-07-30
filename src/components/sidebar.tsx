@@ -1,13 +1,15 @@
+import { getSession } from '@auth0/nextjs-auth0';
+import { SidebarNav } from './sidebar-nav'; // Import the new component
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, LogIn, LogOut } from 'lucide-react';
-import { getSession } from '@auth0/nextjs-auth0';
+import { LogIn, LogOut } from 'lucide-react';
 
 export async function Sidebar() {
   const session = await getSession();
   const user = session?.user;
-
+  
+  const roles = user?.['https://agency-inc-demo.com/roles'] || [];
   const companyName = "Agency Inc";
   const logoUrl = "https://auth0images.s3.us-east-2.amazonaws.com/Auth0+Official+Icons/auth0-identicons/icon-api.png";
 
@@ -15,7 +17,7 @@ export async function Sidebar() {
     <aside className="hidden w-64 flex-col border-r bg-background p-4 md:flex">
       <div className="mb-4 flex items-center gap-3">
         <Image
-          src={logoUrl} // Use the new Auth0 S3 URL
+          src={logoUrl}
           alt={`${companyName} Logo`}
           width={32}
           height={32}
@@ -24,15 +26,9 @@ export async function Sidebar() {
         <h2 className="text-xl font-bold">{companyName}</h2>
       </div>
 
-      <nav className="flex flex-col gap-2">
-        <Button asChild variant="secondary" className="justify-start">
-          <Link href="/reports">
-            <LayoutDashboard className="mr-2 h-4 w-4" />
-            Reports
-          </Link>
-        </Button>
-      </nav>
-
+      {/* Use the client component for navigation and pass roles to it */}
+      {user && <SidebarNav roles={roles} />}
+      
       <div className="mt-auto">
         {user ? (
           <div className="flex items-center gap-3">
@@ -47,7 +43,7 @@ export async function Sidebar() {
                <span className="text-sm font-medium truncate" title={user.name}>
                 {user.name}
                </span>
-               <Button asChild variant="ghost" className="h-auto p-0 justify-start text-xs text-gray-500">
+               <Button asChild variant="ghost" className="h-auto p-0 justify-start text-xs text-muted-foreground">
                 <Link href="/api/auth/logout">
                   <LogOut className="mr-2 h-4 w-4" />
                   Logout
