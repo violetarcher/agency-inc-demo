@@ -1,31 +1,46 @@
 import { getSession, withPageAuthRequired } from "@auth0/nextjs-auth0";
-import { redirect } from 'next/navigation';
+import { managementClient } from "@/lib/auth0-mgmt-client";
+import { MemberManager } from "@/components/admin/member-manager";
 
-// This page will require a login
-export default withPageAuthRequired(async function AdminPage() {
-  const session = await getSession();
-  const user = session?.user;
+// Helper function to check for admin role
+const isAdmin = (session: any): boolean => {
+    const roles = session?.user?.['https://agency-inc-demo.com/roles'] || [];
+    return roles.includes('Admin');
+};
 
-  const roles = user ? user['https://agency-inc-demo.com/roles'] : [];
+// This Server Component will fetch initial data
+async function AdminPage() {
+    const session = await getSession();
 
-  // If the user does not have the 'admin' role, show an access denied message
-  if (!roles.includes('admin')) {
+    if (!isAdmin(session)) {
+        return (
+            <div>
+                <h1 className="text-2xl font-bold">Access Denied</h1>
+                <p>You must be an administrator to view this page.</p>
+            </div>
+        );
+    }
+    
+    // Fetch data from our own API routes
+    const orgId = session?.user.org_id;
+    const [membersRes, rolesRes] = await Promise.all([
+        managementClient.organizations.getMembers({ id: orgId }),
+        managementClient.roles.getAll(),
+    ]);
+
+    const initialMembers = membersRes.data;
+    const availableRoles = rolesRes.data;
+
     return (
         <div>
-            <h1 className="text-2xl font-bold">Access Denied</h1>
-            <p>You must be an administrator to view this page.</p>
+          <header className="mb-8">
+            <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+            <p className="text-muted-foreground">Manage organization members and their roles.</p>
+          </header>
+          <MemberManager initialMembers={initialMembers} availableRoles={availableRoles} />
         </div>
     );
-  }
+}
 
-  // If the user IS an admin, show the dashboard
-  return (
-    <div>
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-        <p className="text-gray-500">Welcome, {user?.name}. Here are the admin stats.</p>
-      </header>
-      {/* Add admin-specific components and data here */}
-    </div>
-  );
-});
+// Wrap the page with the login protector
+export default withPageAuthRequired(AdminPage, { returnTo: '/admin' });
