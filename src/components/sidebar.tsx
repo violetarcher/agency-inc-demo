@@ -27,7 +27,7 @@ export async function Sidebar() {
       </div>
 
       {/* Use the client component for navigation and pass roles to it */}
-      {user && <SidebarNav roles={roles} />}
+      <SidebarNav roles={roles} />
       
       <div className="mt-auto">
         {user ? (
