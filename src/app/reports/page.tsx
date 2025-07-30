@@ -9,7 +9,7 @@ export default withPageAuthRequired(async function ReportsPage() {
     <div>
       <header className="mb-8">
         <h1 className="text-3xl font-bold">Expense Reports</h1>
-        <p className="text-gray-500">Manage reports for Agency Inc.</p>
+        <p className="text-lg text-muted-foreground">Welcome, {session?.user.name}</p>
       </header>
 
       <ReportDashboard permissions={permissions} />

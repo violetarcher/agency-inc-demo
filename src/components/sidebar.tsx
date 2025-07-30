@@ -9,19 +9,17 @@ export async function Sidebar() {
   const user = session?.user;
 
   const companyName = "Agency Inc";
-  // A permanent, stable SVG icon URL
-  const logoUrl = "https://raw.githubusercontent.com/feathericons/feather/master/icons/code.svg";
+  const logoUrl = "https://auth0images.s3.us-east-2.amazonaws.com/Auth0+Official+Icons/auth0-identicons/icon-api.png";
 
   return (
-    <aside className="hidden w-64 flex-col border-r bg-gray-100/40 p-4 md:flex">
+    <aside className="hidden w-64 flex-col border-r bg-background p-4 md:flex">
       <div className="mb-4 flex items-center gap-3">
         <Image
-          src={logoUrl}
+          src={logoUrl} // Use the new Auth0 S3 URL
           alt={`${companyName} Logo`}
           width={32}
           height={32}
-          // Style the SVG to be white for better visibility
-          style={{ filter: 'invert(100%)' }}
+          className="rounded-md"
         />
         <h2 className="text-xl font-bold">{companyName}</h2>
       </div>
@@ -45,7 +43,7 @@ export async function Sidebar() {
               height={32}
               className="rounded-full"
             />
-            <div className="flex flex-col">
+            <div className="flex flex-col min-w-0">
                <span className="text-sm font-medium truncate" title={user.name}>
                 {user.name}
                </span>
@@ -69,5 +67,3 @@ export async function Sidebar() {
     </aside>
   );
 }
-//test 
-//test 2

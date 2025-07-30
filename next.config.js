@@ -9,9 +9,9 @@ const nextConfig = {
         port: '',
         pathname: '/api/**',
       },
-      { // Add this new entry for the permanent logo
+      { // Add this new entry for the Auth0 S3 bucket
         protocol: 'https',
-        hostname: 'raw.githubusercontent.com',
+        hostname: 'auth0images.s3.us-east-2.amazonaws.com',
         port: '',
         pathname: '/**',
       },
