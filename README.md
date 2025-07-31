@@ -55,7 +55,7 @@ Follow these instructions to set up and run the project on your local machine.
 5.  **Create the Organization**
     * Go to **Organizations** and create a new organization named `Agency Inc`.
     * In the organization's **Applications** tab, enable the `Agency Inc Dashboard` application.
-    * In the organization's **Connections** tab, enable your `Username-Password-Authentication` database connection. Click the `...` menu, select "Connection details," and ensure **Auto-Membership** is toggled **ON**.
+    * In the organization's **Connections** tab, enable your `Username-Password-Authentication` database connection. Then, click the `...` menu on the connection, select `Connection details`, and ensure both **Auto-Membership** and **Show sign-up** are enabled.
 
 6.  **Create the "Add Roles" Action**
     * Go to **Actions > Flows** and select the **Login** flow.
@@ -104,7 +104,7 @@ Auth0 invitations require a secure HTTPS URL. `ngrok` provides one for your loca
     ```
 
 2.  **Create `.env.local` File**
-    * Create a `.env.local` file in the project root and add the following variables.
+    * Create a `.env.local` file in the project root.
     * **IMPORTANT**: `AUTH0_BASE_URL` must be your `https://` ngrok domain.
 
     ```
@@ -128,7 +128,7 @@ Auth0 invitations require a secure HTTPS URL. `ngrok` provides one for your loca
 3.  **Update Auth0 Dashboard URLs**
     * Go to your `Agency Inc Dashboard` application settings in Auth0.
     * Set the **Allowed Callback URLs** and **Allowed Logout URLs** to use your `https://` ngrok domain.
-    * Go to **Branding > Universal Login > Settings** and set the **Default Login Route** to your `Agency Inc Dashboard` application.
+    * In the same settings page, find the **Application Login URI** field and set it to your `https://` ngrok domain followed by `/api/auth/login`.
 
 ---
 
