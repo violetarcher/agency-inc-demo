@@ -63,11 +63,11 @@ Follow these instructions to set up and run the project on your local machine.
     * Use the following code:
         ```javascript
         exports.onExecutePostLogin = async (event, api) => {
-          const namespace = '[https://agency-inc-demo.com](https://agency-inc-demo.com)';
-          if (event.authorization) {
-            api.idToken.setCustomClaim(`${namespace}/roles`, event.authorization.roles);
-          }
-        };
+        const namespace = 'https://agency-inc-demo.com';
+        if (event.authorization) {
+        api.idToken.setCustomClaim(`${namespace}/roles`, event.authorization.roles);
+        }
+      };
         ```
     * Deploy the action and drag it into the Login flow diagram.
 
