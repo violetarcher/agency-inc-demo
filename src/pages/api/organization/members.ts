@@ -45,21 +45,5 @@ export default withApiAuthRequired(async function handler(
     console.error("Full Auth0 Error:", JSON.stringify(error, null, 2));
     return res.status(error.statusCode || 500).json({ error: error.message });
 }
-
-    case 'DELETE': // Remove a member
-      try {
-        const { memberId } = req.body;
-        await managementClient.organizations.removeMembers(
-          { id: orgId },
-          { members: [memberId] }
-        );
-        return res.status(204).end();
-      } catch (error: any) {
-        return res.status(error.statusCode || 500).json({ error: error.message });
-      }
-      
-    default:
-      res.setHeader('Allow', ['GET', 'POST', 'DELETE']);
-      res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 });

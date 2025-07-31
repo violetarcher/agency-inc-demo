@@ -21,8 +21,12 @@ async function AdminPage() {
         );
     }
     
-    // Fetch data from our own API routes
     const orgId = session?.user.org_id;
+    if (!orgId) {
+        return <div>Organization not found.</div>;
+    }
+    
+    // 1. Fetch the initial list of members and all available roles
     const [membersRes, rolesRes] = await Promise.all([
         managementClient.organizations.getMembers({ id: orgId }),
         managementClient.roles.getAll(),
@@ -31,13 +35,25 @@ async function AdminPage() {
     const initialMembers = membersRes.data;
     const availableRoles = rolesRes.data;
 
+    // 2. For each member, create a promise to fetch their assigned roles
+    const memberRolePromises = initialMembers.map(member => 
+        managementClient.organizations.getMemberRoles({ id: orgId, user_id: member.user_id })
+    );
+    const memberRolesResults = await Promise.all(memberRolePromises);
+
+    // 3. Combine the member data with their roles
+    const membersWithRoles = initialMembers.map((member, index) => ({
+        ...member,
+        roles: memberRolesResults[index].data
+    }));
+
     return (
         <div>
           <header className="mb-8">
             <h1 className="text-3xl font-bold">Admin Dashboard</h1>
             <p className="text-muted-foreground">Manage organization members and their roles.</p>
           </header>
-          <MemberManager initialMembers={initialMembers} availableRoles={availableRoles} />
+          <MemberManager initialMembers={membersWithRoles} availableRoles={availableRoles} />
         </div>
     );
 }
