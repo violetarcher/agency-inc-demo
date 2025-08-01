@@ -1,5 +1,5 @@
 import { withPageAuthRequired, getSession } from '@auth0/nextjs-auth0';
-import ReportDashboard from '@/components/report-dashboard';
+import { ReportDashboard } from '@/components/report-dashboard';
 
 export default withPageAuthRequired(async function ReportsPage() {
   const session = await getSession();

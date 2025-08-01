@@ -1,18 +1,20 @@
 'use client';
 
 import { useState, useEffect, FormEvent } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogClose
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useRouter } from 'next/navigation';
+import { toast } from "sonner";
+import { MoreHorizontal } from 'lucide-react';
 
-// Define the shape of a report
+// Type definitions
 type Report = {
   id: string;
   title: string;
@@ -21,31 +23,42 @@ type Report = {
   createdAt: string;
 };
 
-// Define the props for our component
 interface ReportDashboardProps {
   permissions: string[];
 }
 
-export default function ReportDashboard({ permissions }: ReportDashboardProps) {
+export function ReportDashboard({ permissions }: ReportDashboardProps) {
   const [reports, setReports] = useState<Report[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentReport, setCurrentReport] = useState<Partial<Report> | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const fetchReports = async () => {
-    setIsLoading(true);
     const response = await fetch('/api/reports');
     if (response.ok) {
-      const data = await response.json();
-      setReports(data);
+      setReports(await response.json());
     }
-    setIsLoading(false);
   };
 
   useEffect(() => {
     fetchReports();
-  }, []);
+
+    // Check for our explicit 'stepup_complete' parameter to trigger post-MFA actions
+    if (searchParams.get('stepup_complete') === 'true') {
+      const action = sessionStorage.getItem('post_stepup_action');
+      if (action) {
+        const { actionType, reportId, reportTitle } = JSON.parse(action);
+        if (actionType === 'delete' && reportId) {
+          performDelete(reportId, reportTitle);
+        }
+        sessionStorage.removeItem('post_stepup_action');
+
+        // Clean the URL by removing the query parameter
+        router.replace('/reports', { scroll: false });
+      }
+    }
+  }, [searchParams]);
 
   const handleCreate = () => {
     setCurrentReport({});
@@ -57,17 +70,9 @@ export default function ReportDashboard({ permissions }: ReportDashboardProps) {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this report?')) {
-      await fetch(`/api/reports/${id}`, { method: 'DELETE' });
-      fetchReports(); // Refresh the list
-    }
-  };
-
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const form = e.currentTarget;
-    const formData = new FormData(form);
+    const formData = new FormData(e.currentTarget);
     const reportData = {
       title: formData.get('title') as string,
       amount: Number(formData.get('amount')),
@@ -83,22 +88,62 @@ export default function ReportDashboard({ permissions }: ReportDashboardProps) {
     });
 
     if (response.ok) {
+      toast.success(currentReport?.id ? "Report Updated" : "Report Created");
       setIsDialogOpen(false);
-      fetchReports(); // Refresh the list
+      fetchReports();
     } else {
-      alert('Failed to save report.');
+      toast.error("Failed to save report.");
     }
   };
 
-  if (isLoading) {
-    return <div>Loading reports...</div>;
-  }
+  const startDeleteFlow = (report: Report) => {
+    if (confirm(`To delete "${report.title}", you will need to re-authenticate for security.`)) {
+      const action = { actionType: 'delete', reportId: report.id, reportTitle: report.title };
+      sessionStorage.setItem('post_stepup_action', JSON.stringify(action));
+      
+      // Add the explicit parameter to the returnTo URL
+      router.push('/api/auth/login?returnTo=/reports?stepup_complete=true&stepup=true');
+    }
+  };
 
-  return (
-    <>
+  // for conditional for step up only if amr claim is missing
+  // // 3. UPDATED: This function is now smarter
+  // const startDeleteFlow = (report: any) => {
+  //   // First, check if the user object is available and if they already have MFA in their session.
+  //   // The 'amr' claim proves which authentication methods were used.
+  //   if (user && user.amr && user.amr.includes('mfa')) {
+  //     // If they have a recent MFA, they can delete directly
+  //     if (confirm(`Are you sure you want to delete "${report.title}"?`)) {
+  //       performDelete(report.id, report.title);
+  //     }
+  //   } else {
+  //     // If not, send them through the step-up flow
+  //     if (confirm(`To delete "${report.title}", you will need to re-authenticate for security.`)) {
+  //       const action = { actionType: 'delete', reportId: report.id, reportTitle: report.title };
+  //       sessionStorage.setItem('post_stepup_action', JSON.stringify(action));
+  //       router.push('/api/auth/login?returnTo=/reports?stepup_complete=true&stepup=true');
+  //     }
+  //   }
+  // };
+
+  
+  const performDelete = async (reportId: string, reportTitle: string) => {
+  const response = await fetch(`/api/reports/${reportId}`, { method: 'DELETE' });
+  if (response.ok) {
+    toast.success("Report Deleted", { description: `"${reportTitle}" has been deleted.` });
+    fetchReports();
+  } else {
+    const error = await response.json();
+    // Corrected to use error.error
+    toast.error("Failed to delete report.", { description: error?.error || 'An unknown error occurred.'});
+  }
+};
+
+   return (
+    <div>
       <div className="flex justify-end mb-4">
         {permissions.includes('create:reports') && (
-          <Button onClick={handleCreate}>Add New Report</Button>
+          <Button onClick={handleCreate}>Create Report</Button>
         )}
       </div>
       <div className="rounded-md border">
@@ -107,8 +152,7 @@ export default function ReportDashboard({ permissions }: ReportDashboardProps) {
             <TableRow>
               <TableHead>Title</TableHead>
               <TableHead>Amount</TableHead>
-              <TableHead>Author</TableHead>
-              <TableHead>Created At</TableHead>
+              <TableHead>Author</TableHead> {/* 1. Add Header */}
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -117,14 +161,13 @@ export default function ReportDashboard({ permissions }: ReportDashboardProps) {
               <TableRow key={report.id}>
                 <TableCell>{report.title}</TableCell>
                 <TableCell>${report.amount.toFixed(2)}</TableCell>
-                <TableCell>{report.author}</TableCell>
-                <TableCell>{new Date(report.createdAt).toLocaleDateString()}</TableCell>
-                <TableCell className="text-right">
+                <TableCell>{report.author}</TableCell> {/* 2. Add Cell */}
+                <TableCell className="text-right space-x-2">
                    {permissions.includes('edit:reports') && (
-                    <Button variant="outline" size="sm" className="mr-2" onClick={() => handleEdit(report)}>Edit</Button>
+                    <Button variant="outline" size="sm" onClick={() => handleEdit(report)}>Edit</Button>
                   )}
                   {permissions.includes('delete:reports') && (
-                    <Button variant="destructive" size="sm" onClick={() => handleDelete(report.id)}>Delete</Button>
+                    <Button variant="destructive" size="sm" onClick={() => startDeleteFlow(report)}>Delete</Button>
                   )}
                 </TableCell>
               </TableRow>
@@ -136,7 +179,7 @@ export default function ReportDashboard({ permissions }: ReportDashboardProps) {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{currentReport?.id ? 'Edit Report' : 'Create Report'}</DialogTitle>
+            <DialogTitle>{currentReport?.id ? 'Edit Report' : 'Create New Report'}</DialogTitle>
             <DialogDescription>Fill in the details for the expense report.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
@@ -151,14 +194,12 @@ export default function ReportDashboard({ permissions }: ReportDashboardProps) {
               </div>
             </div>
             <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="secondary">Cancel</Button>
-              </DialogClose>
+              <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
               <Button type="submit">Save</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }
