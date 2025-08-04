@@ -1,9 +1,14 @@
+// src/app/layout.tsx - Using AuthWrapper
 import { ThemeProvider } from "@/components/theme-provider";
 import { Sidebar } from "@/components/sidebar";
-import { Toaster } from "@/components/ui/sonner"; // 1. Update the import
+import { Toaster } from "@/components/ui/sonner";
+import { AuthWrapper } from "@/components/auth-wrapper";
 import './globals.css';
 
-// ... metadata ...
+export const metadata = {
+  title: 'Agency Inc Dashboard',
+  description: 'B2B SaaS Dashboard with Auth0 Organizations',
+};
 
 export default function RootLayout({
   children,
@@ -13,20 +18,22 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <div className="flex min-h-screen w-full">
-            <Sidebar />
-            <main className="flex-1 p-8">
-              {children}
-            </main>
-          </div>
-          <Toaster /> {/* 2. This Toaster is now from sonner */}
-        </ThemeProvider>
+        <AuthWrapper>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <div className="flex min-h-screen w-full">
+              <Sidebar />
+              <main className="flex-1 p-8">
+                {children}
+              </main>
+            </div>
+            <Toaster />
+          </ThemeProvider>
+        </AuthWrapper>
       </body>
     </html>
   );

@@ -1,3 +1,4 @@
+// src/app/admin/page.tsx - Restored original admin dashboard
 import { getSession, withPageAuthRequired } from "@auth0/nextjs-auth0";
 import { managementClient } from "@/lib/auth0-mgmt-client";
 import { MemberManager } from "@/components/admin/member-manager";
@@ -11,7 +12,6 @@ const isAdmin = (session: any): boolean => {
 // This Server Component will fetch initial data
 async function AdminPage() {
     const session = await getSession();
-
     if (!isAdmin(session)) {
         return (
             <div>
@@ -31,22 +31,21 @@ async function AdminPage() {
         managementClient.organizations.getMembers({ id: orgId }),
         managementClient.roles.getAll(),
     ]);
-
     const initialMembers = membersRes.data;
     const availableRoles = rolesRes.data;
-
+    
     // 2. For each member, create a promise to fetch their assigned roles
     const memberRolePromises = initialMembers.map(member => 
         managementClient.organizations.getMemberRoles({ id: orgId, user_id: member.user_id })
     );
     const memberRolesResults = await Promise.all(memberRolePromises);
-
+    
     // 3. Combine the member data with their roles
     const membersWithRoles = initialMembers.map((member, index) => ({
         ...member,
         roles: memberRolesResults[index].data
     }));
-
+    
     return (
         <div>
           <header className="mb-8">

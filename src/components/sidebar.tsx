@@ -1,5 +1,6 @@
+// src/components/sidebar.tsx - Clean production version
 import { getSession } from '@auth0/nextjs-auth0';
-import { SidebarNav } from './sidebar-nav'; // Import the new component
+import { SidebarNav } from './sidebar-nav';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
@@ -8,7 +9,6 @@ import { LogIn, LogOut } from 'lucide-react';
 export async function Sidebar() {
   const session = await getSession();
   const user = session?.user;
-  
   const roles = user?.['https://agency-inc-demo.com/roles'] || [];
   const companyName = "Agency Inc";
   const logoUrl = "https://auth0images.s3.us-east-2.amazonaws.com/Auth0+Official+Icons/auth0-identicons/icon-api.png";
@@ -26,7 +26,6 @@ export async function Sidebar() {
         <h2 className="text-xl font-bold">{companyName}</h2>
       </div>
 
-      {/* Use the client component for navigation and pass roles to it */}
       <SidebarNav roles={roles} />
       
       <div className="mt-auto">
