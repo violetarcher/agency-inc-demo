@@ -1,4 +1,4 @@
-// src/components/sidebar-nav.tsx - Clean production version
+// src/components/sidebar-nav.tsx - Updated with Analytics
 'use client';
 
 import Link from 'next/link';
@@ -9,7 +9,8 @@ import {
   FileText, 
   Settings,
   Monitor,
-  Search
+  Search,
+  BarChart3
 } from 'lucide-react';
 
 interface SidebarNavProps {
@@ -18,6 +19,7 @@ interface SidebarNavProps {
 
 export function SidebarNav({ roles }: SidebarNavProps) {
   const pathname = usePathname();
+  
   const isAdmin = roles && Array.isArray(roles) && roles.includes('Admin');
 
   return (
@@ -53,6 +55,18 @@ export function SidebarNav({ roles }: SidebarNavProps) {
         <Link href="/inspector">
           <Search className="mr-2 h-4 w-4" />
           Inspector
+        </Link>
+      </Button>
+      
+      {/* Analytics - Show for everyone, access control handled on page */}
+      <Button 
+        asChild 
+        variant={pathname === '/analytics' ? 'secondary' : 'ghost'} 
+        className="w-full justify-start"
+      >
+        <Link href="/analytics">
+          <BarChart3 className="mr-2 h-4 w-4" />
+          Analytics
         </Link>
       </Button>
       

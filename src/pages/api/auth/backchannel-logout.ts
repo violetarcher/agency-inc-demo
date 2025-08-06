@@ -2,7 +2,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 
 // Simple storage for revoked sessions
-let revokedSessions = new Set<string>();
+const revokedSessions = new Set<string>();
 
 // Function to add revoked session
 export function addRevokedSession(sessionId: string) {

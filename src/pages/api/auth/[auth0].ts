@@ -6,9 +6,9 @@ export default handleAuth({
       const isStepUp = req.query.stepup === 'true';
       const hasInvitation = !!req.query.invitation; // Check if it's an invitation
       
-      let authorizationParams: any = { // Use 'any' to allow adding properties
+      const authorizationParams: any = { // Use 'any' to allow adding properties
         audience: process.env.AUTH0_AUDIENCE,
-        scope: 'openid profile email read:reports create:reports edit:reports delete:reports',
+        scope: 'openid profile email read:reports create:reports edit:reports delete:reports read:analytics',
       };
 
       if (isStepUp) {
