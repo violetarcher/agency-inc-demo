@@ -114,7 +114,7 @@ Auth0 invitations require a secure HTTPS URL. `ngrok` provides one for your loca
     AUTH0_ISSUER_BASE_URL='<your-auth0-domain>'
     AUTH0_CLIENT_ID='<your-agency-inc-dashboard-client-id>'
     AUTH0_CLIENT_SECRET='<your-agency-inc-dashboard-client-secret>'
-    AUTH0_AUDIENCE='[https://b2b-saas-api.example.com](https://b2b-saas-api.example.com)'
+    AUTH0_AUDIENCE='https://b2b-saas-api.example.com'
 
     # Auth0 Management API (from your M2M App)
     AUTH0_MGMT_DOMAIN='<your-auth0-domain-without-https>'

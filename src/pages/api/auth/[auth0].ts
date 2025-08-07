@@ -8,8 +8,12 @@ export default handleAuth({
       
       const authorizationParams: any = { // Use 'any' to allow adding properties
         audience: process.env.AUTH0_AUDIENCE,
-        scope: 'openid profile email read:reports create:reports edit:reports delete:reports read:analytics',
+        scope: 'openid profile email offline_access read:reports create:reports edit:reports delete:reports read:analytics',
       };
+
+       if (req.query.login_hint) {
+        authorizationParams.login_hint = req.query.login_hint;
+      }
 
       if (isStepUp) {
         // Add MFA params for step-up
