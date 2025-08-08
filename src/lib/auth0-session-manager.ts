@@ -1,3 +1,4 @@
+// src/lib/auth0-session-manager.ts
 export interface Auth0Session {
   id: string;
   user_id: string;
@@ -103,32 +104,6 @@ export class Auth0SessionManager {
   }
 
   /**
-   * Delete all sessions for a user except the current one
-   */
-  static async deleteOtherUserSessions(userId: string, currentSessionId?: string): Promise<number> {
-    try {
-      const sessions = await this.getUserSessions(userId);
-      
-      // Filter out the current session if provided
-      const sessionsToDelete = currentSessionId 
-        ? sessions.filter(session => session.id !== currentSessionId)
-        : sessions.slice(0, -1); // Keep the most recent session
-
-      // Delete sessions in parallel
-      const deletePromises = sessionsToDelete.map(session => 
-        this.deleteSession(session.id)
-      );
-
-      await Promise.all(deletePromises);
-      
-      return sessionsToDelete.length;
-    } catch (error) {
-      console.error('Error deleting other user sessions:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Enforce single session limit for a user
    */
   static async enforceSingleSession(userId: string, currentSessionId?: string): Promise<{
@@ -176,36 +151,6 @@ export class Auth0SessionManager {
     } catch (error) {
       console.error('Error enforcing single session:', error);
       throw error;
-    }
-  }
-
-  /**
-   * Get session details by session ID
-   */
-  static async getSessionById(sessionId: string): Promise<Auth0Session | null> {
-    try {
-      const token = await getManagementToken();
-      
-      const response = await fetch(`https://${process.env.AUTH0_MGMT_DOMAIN}/api/v2/sessions/${sessionId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null;
-        }
-        const data = await response.json();
-        throw new Error(`Failed to get session: ${data.message || 'Unknown error'}`);
-      }
-      
-      return await response.json();
-    } catch (error) {
-      console.error(`Error fetching session ${sessionId}:`, error);
-      return null;
     }
   }
 }

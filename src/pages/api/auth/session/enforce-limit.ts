@@ -1,3 +1,4 @@
+// src/pages/api/auth/session/enforce-limit.ts
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getSession, withApiAuthRequired } from '@auth0/nextjs-auth0';
 import { Auth0SessionManager } from '../../../../lib/auth0-session-manager';
@@ -17,11 +18,16 @@ export default withApiAuthRequired(async function handler(
     }
 
     const { user } = session;
-    const currentSessionId = session.user['https://agency-inc-demo.com/session_id'] || req.body.currentSessionId;
+    const roles = user['https://agency-inc-demo.com/roles'] || [];
+    
+    // Check if user is admin
+    if (!roles.includes('Admin')) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
 
-    console.log(`Enforcing single session for user ${user.sub}, keeping session ${currentSessionId}`);
+    const currentSessionId = session.user['https://agency-inc-demo.com/session_id'];
 
-    // Enforce single session limit
+    // Enforce single session limit for current user
     const result = await Auth0SessionManager.enforceSingleSession(
       user.sub, 
       currentSessionId
