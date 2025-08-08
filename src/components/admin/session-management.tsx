@@ -5,11 +5,14 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Trash2, Monitor, Clock, MapPin, Shield, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Trash2, Monitor, Clock, MapPin, Shield, RefreshCw, AlertTriangle, User, Mail, Globe } from 'lucide-react';
 import { Alert, AlertDescription } from '../ui/alert';
 
 interface SessionInfo {
   id: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
   createdAt: string;
   lastActivity: string;
   lastInteracted: string;
@@ -28,10 +31,16 @@ interface SessionInfo {
       type?: string;
     }>;
   };
+  isCurrentUser: boolean;
+  isCurrentSession: boolean;
+}
+
+interface OrganizationSession extends SessionInfo {
+  // This matches your backend data structure
 }
 
 export function SessionManagement() {
-  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [sessions, setSessions] = useState<OrganizationSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentSessionId, setCurrentSessionId] = useState<string>('');
   const [userId, setUserId] = useState<string>('');
@@ -59,7 +68,8 @@ export function SessionManagement() {
   };
 
   const terminateSession = async (sessionId: string) => {
-    const isCurrentSession = sessionId === currentSessionId;
+    const session = sessions.find(s => s.id === sessionId);
+    const isCurrentSession = session?.isCurrentSession;
     
     if (isCurrentSession && !confirm('This will log you out. Are you sure?')) {
       return;
@@ -80,10 +90,8 @@ export function SessionManagement() {
 
       if (result.success) {
         if (isCurrentSession) {
-          // Redirect to logout if terminating current session
           window.location.href = '/api/auth/logout';
         } else {
-          // Refresh sessions list
           await fetchSessions();
         }
       } else {
@@ -138,6 +146,7 @@ export function SessionManagement() {
     if (userAgent.includes('Firefox')) return 'Firefox'; 
     if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) return 'Safari';
     if (userAgent.includes('Edge')) return 'Edge';
+    if (userAgent.includes('Mobile')) return 'Mobile Browser';
     return 'Unknown browser';
   };
 
@@ -160,9 +169,29 @@ export function SessionManagement() {
     return `${Math.floor(diffInMinutes / 1440)}d ago`;
   };
 
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  // Group sessions by user
+  const sessionsByUser = sessions.reduce((acc, session) => {
+    if (!acc[session.userId]) {
+      acc[session.userId] = {
+        userInfo: {
+          userId: session.userId,
+          userName: session.userName,
+          userEmail: session.userEmail,
+          isCurrentUser: session.isCurrentUser
+        },
+        sessions: []
+      };
+    }
+    acc[session.userId].sessions.push(session);
+    return acc;
+  }, {} as Record<string, { userInfo: any, sessions: OrganizationSession[] }>);
+
   useEffect(() => {
     fetchSessions();
-    // Auto-refresh every 30 seconds
     const interval = setInterval(fetchSessions, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -182,8 +211,8 @@ export function SessionManagement() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      {/* <Card>
+      {/* Header with Stats */}
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span className="flex items-center gap-2">
@@ -200,95 +229,117 @@ export function SessionManagement() {
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
-              {sessions.length > 1 && (
-                <Button 
-                  onClick={enforceSessionLimit} 
-                  variant="destructive" 
-                  size="sm"
-                  disabled={enforcing}
-                >
-                  <Shield className="h-4 w-4 mr-2" />
-                  {enforcing ? 'Enforcing...' : 'Limit to 1 Session'}
-                </Button>
-              )}
             </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             <div className="text-center p-4 border rounded">
               <div className="text-2xl font-bold">{sessions.length}</div>
-              <div className="text-sm text-gray-500">Active Sessions</div>
+              <div className="text-sm text-gray-500">Total Sessions</div>
             </div>
             <div className="text-center p-4 border rounded">
-              <div className="text-2xl font-bold">1</div>
-              <div className="text-sm text-gray-500">Session Limit</div>
+              <div className="text-2xl font-bold">{Object.keys(sessionsByUser).length}</div>
+              <div className="text-sm text-gray-500">Unique Users</div>
             </div>
             <div className="text-center p-4 border rounded">
-              <div className="text-2xl font-bold">{Math.max(0, sessions.length - 1)}</div>
-              <div className="text-sm text-gray-500">Sessions to Terminate</div>
+              <div className="text-2xl font-bold">
+                {sessions.filter(s => s.isCurrentSession).length}
+              </div>
+              <div className="text-sm text-gray-500">Current Sessions</div>
+            </div>
+            <div className="text-center p-4 border rounded">
+              <div className="text-2xl font-bold">
+                {sessions.filter(s => s.isCurrentUser).length}
+              </div>
+              <div className="text-sm text-gray-500">Your Sessions</div>
             </div>
           </div>
-          
-          {sessions.length > 1 && (
-            <Alert>
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                Multiple sessions detected. Consider enforcing the single session limit to prevent account sharing.
-              </AlertDescription>
-            </Alert>
-          )}
         </CardContent>
-      </Card> */}
+      </Card>
 
-      {/* Sessions List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Active Sessions ({sessions.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {sessions.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No active sessions found.</p>
-          ) : (
+      {/* Sessions by User */}
+      {Object.entries(sessionsByUser).map(([userId, { userInfo, sessions: userSessions }]) => (
+        <Card key={userId}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              <div className="flex items-center gap-2 flex-wrap">
+                <span>{userInfo.userName}</span>
+                <Badge variant="secondary" className="flex items-center gap-1">
+                  <Mail className="h-3 w-3" />
+                  {userInfo.userEmail}
+                </Badge>
+                {userInfo.isCurrentUser && (
+                  <Badge variant="default">You</Badge>
+                )}
+                <Badge variant="outline">
+                  {userSessions.length} session{userSessions.length !== 1 ? 's' : ''}
+                </Badge>
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
             <div className="space-y-4">
-              {sessions.map((session) => (
+              {userSessions.map((session) => (
                 <div 
                   key={session.id} 
                   className={`border rounded-lg p-4 ${
-                    session.id === currentSessionId ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' : ''
+                    session.isCurrentSession ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' : ''
                   }`}
                 >
                   <div className="flex justify-between items-start">
                     <div className="space-y-3 flex-1">
                       {/* Session Header */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-medium">Session {session.id.substring(0, 8)}...</h3>
-                        {session.id === currentSessionId && (
-                          <Badge variant="default">Current Session</Badge>
+                        <h4 className="font-medium">Session {session.id.substring(0, 8)}...</h4>
+                        {session.isCurrentSession && (
+                          <Badge variant="default">Current</Badge>
                         )}
                         <Badge variant="outline">
                           {formatUserAgent(session.device.userAgent)}
                         </Badge>
+                        {session.clients?.length > 0 && (
+                          <Badge variant="secondary">
+                            {session.clients.length} client{session.clients.length !== 1 ? 's' : ''}
+                          </Badge>
+                        )}
                       </div>
                       
-                      {/* Timestamps */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
+                      {/* Timestamps Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
                         <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          <span>Created {getTimeAgo(session.createdAt)}</span>
+                          <Clock className="h-4 w-4 text-green-500" />
+                          <div>
+                            <div className="font-medium">Created</div>
+                            <div className="text-gray-500">{getTimeAgo(session.createdAt)}</div>
+                          </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          <span>Active {getTimeAgo(session.lastInteracted)}</span>
+                          <Clock className="h-4 w-4 text-blue-500" />
+                          <div>
+                            <div className="font-medium">Last Activity</div>
+                            <div className="text-gray-500">{getTimeAgo(session.lastActivity)}</div>
+                          </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          <span>Expires {getTimeAgo(session.expiresAt)}</span>
+                          <Clock className="h-4 w-4 text-orange-500" />
+                          <div>
+                            <div className="font-medium">Last Interaction</div>
+                            <div className="text-gray-500">{getTimeAgo(session.lastInteracted)}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-red-500" />
+                          <div>
+                            <div className="font-medium">Expires</div>
+                            <div className="text-gray-500">{getTimeAgo(session.expiresAt)}</div>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Device Info */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                      {/* Device and Network Info */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
                         {session.device.ipAddress && (
                           <div className="flex items-center gap-2">
                             <MapPin className="h-4 w-4" />
@@ -297,7 +348,16 @@ export function SessionManagement() {
                         )}
                         {session.device.asn && (
                           <div className="flex items-center gap-2">
-                            <span className="text-gray-500">ASN: {session.device.asn}</span>
+                            <Globe className="h-4 w-4" />
+                            <span>ASN: {session.device.asn}</span>
+                          </div>
+                        )}
+                        {session.device.userAgent && (
+                          <div className="flex items-center gap-2 col-span-full">
+                            <Monitor className="h-4 w-4" />
+                            <span className="truncate" title={session.device.userAgent}>
+                              {session.device.userAgent}
+                            </span>
                           </div>
                         )}
                       </div>
@@ -307,11 +367,27 @@ export function SessionManagement() {
                         <span className="font-medium">Authentication: </span>
                         <span>{formatAuthMethods(session.authentication.methods)}</span>
                       </div>
+
+                      {/* Expiration Info */}
+                      <div className="text-xs text-gray-500 grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div>Session expires: {formatDateTime(session.expiresAt)}</div>
+                        <div>Idle expires: {formatDateTime(session.idleExpiresAt)}</div>
+                      </div>
+
+                      {/* Client Info */}
+                      {session.clients?.length > 0 && (
+                        <div className="text-xs">
+                          <span className="font-medium">Clients: </span>
+                          <span className="text-gray-500">
+                            {session.clients.map(c => c.client_id).join(', ')}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions */}
                     <Button
-                      variant={session.id === currentSessionId ? "outline" : "destructive"}
+                      variant={session.isCurrentSession ? "outline" : "destructive"}
                       size="sm"
                       onClick={() => terminateSession(session.id)}
                       disabled={terminating.includes(session.id)}
@@ -322,15 +398,23 @@ export function SessionManagement() {
                       ) : (
                         <Trash2 className="h-4 w-4" />
                       )}
-                      {session.id === currentSessionId ? 'Logout' : 'Terminate'}
+                      {session.isCurrentSession ? 'Logout' : 'Terminate'}
                     </Button>
                   </div>
                 </div>
               ))}
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ))}
+
+      {sessions.length === 0 && (
+        <Card>
+          <CardContent className="p-8">
+            <p className="text-gray-500 text-center">No active sessions found.</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
