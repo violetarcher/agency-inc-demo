@@ -3,6 +3,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Sidebar } from "@/components/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthWrapper } from "@/components/auth-wrapper";
+import { ErrorBoundary } from "@/components/error-boundary";
 import './globals.css';
 
 export const metadata = {
@@ -18,22 +19,24 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <AuthWrapper>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="dark"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <div className="flex min-h-screen w-full">
-              <Sidebar />
-              <main className="flex-1 p-8">
-                {children}
-              </main>
-            </div>
-            <Toaster />
-          </ThemeProvider>
-        </AuthWrapper>
+        <ErrorBoundary>
+          <AuthWrapper>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="dark"
+              enableSystem
+              disableTransitionOnChange
+            >
+              <div className="flex min-h-screen w-full">
+                <Sidebar />
+                <main className="flex-1 p-8">
+                  {children}
+                </main>
+              </div>
+              <Toaster />
+            </ThemeProvider>
+          </AuthWrapper>
+        </ErrorBoundary>
       </body>
     </html>
   );

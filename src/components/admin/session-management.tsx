@@ -169,6 +169,17 @@ export function SessionManagement() {
     return `${Math.floor(diffInMinutes / 1440)}d ago`;
   };
 
+  const getTimeUntil = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMinutes = Math.floor((date.getTime() - now.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Expired';
+    if (diffInMinutes < 60) return `${diffInMinutes}m left`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h left`;
+    return `${Math.floor(diffInMinutes / 1440)}d left`;
+  };
+
   const formatDateTime = (dateString: string) => {
     return new Date(dateString).toLocaleString();
   };
@@ -333,7 +344,7 @@ export function SessionManagement() {
                           <Clock className="h-4 w-4 text-red-500" />
                           <div>
                             <div className="font-medium">Expires</div>
-                            <div className="text-gray-500">{getTimeAgo(session.expiresAt)}</div>
+                            <div className="text-gray-500">{getTimeUntil(session.expiresAt)}</div>
                           </div>
                         </div>
                       </div>

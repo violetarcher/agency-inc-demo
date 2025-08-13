@@ -57,7 +57,7 @@ export function SessionMonitor() {
 
     // Extract session ID from the user object if available
     // This might be in the token or you might need to get it differently
-    const sessionId = user.sid || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const sessionId = (user as any).sid || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     currentSessionIdRef.current = sessionId;
 
     // Enforce session limit immediately on mount

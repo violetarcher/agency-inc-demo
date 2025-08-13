@@ -18,16 +18,25 @@ export default function AnalyticsPage() {
   const handleRequestAccess = async () => {
     setIsRequestingAccess(true);
     try {
-      const prepareResponse = await fetch('/api/prepare-access-request', {
+      const accessRequest = {
+        role: 'Data Analyst',
+        reason: 'Request access to view analytics dashboard and reporting data'
+      };
+
+      const response = await fetch('/api/request-access', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ accessRequest }),
       });
       
-      if (!prepareResponse.ok) {
-        throw new Error('Failed to prepare access request.');
+      if (!response.ok) {
+        throw new Error('Failed to submit access request.');
       }
 
-      const loginHint = encodeURIComponent(user.email);
-      window.location.href = `/api/auth/login?returnTo=/analytics&login_hint=${loginHint}`;
+      alert('Access request submitted successfully! You will be notified when approved.');
+      setIsRequestingAccess(false);
 
     } catch (error) {
       console.error('Error requesting access:', error);

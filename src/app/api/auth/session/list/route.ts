@@ -1,21 +1,13 @@
-// src/pages/api/auth/session/list.ts - Updated for organization-wide sessions
-import { NextApiRequest, NextApiResponse } from 'next';
-import { getSession, withApiAuthRequired } from '@auth0/nextjs-auth0';
-import { Auth0SessionManager } from '../../../../lib/auth0-session-manager';
-import { managementClient } from '../../../../lib/auth0-mgmt-client';
+import { NextRequest } from 'next/server';
+import { getSession } from '@auth0/nextjs-auth0';
+import { Auth0SessionManager } from '@/lib/auth0-session-manager';
+import { managementClient } from '@/lib/auth0-mgmt-client';
 
-export default withApiAuthRequired(async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
+export async function GET(request: NextRequest) {
   try {
-    const session = await getSession(req, res);
-    if (!session) {
-      return res.status(401).json({ error: 'No session found' });
+    const session = await getSession();
+    if (!session?.user) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { user } = session;
@@ -23,22 +15,21 @@ export default withApiAuthRequired(async function handler(
     
     // Check if user is admin
     if (!roles.includes('Admin')) {
-      return res.status(403).json({ error: 'Admin access required' });
+      return Response.json({ error: 'Admin access required' }, { status: 403 });
     }
 
     // Get organization ID
     const orgId = user['https://agency-inc-demo.com/org_id'];
     if (!orgId) {
-      return res.status(400).json({ error: 'Organization not found' });
+      return Response.json({ error: 'Organization not found' }, { status: 400 });
     }
 
-    console.log(`🔍 Fetching sessions for all members in organization: ${orgId}`);
+    // Get current session ID from the user's token
+    const currentSessionId = user['https://agency-inc-demo.com/session_id'];
 
     // Get all organization members
     const membersResponse = await managementClient.organizations.getMembers({ id: orgId });
     const members = membersResponse.data;
-
-    console.log(`👥 Found ${members.length} organization members`);
 
     // Get sessions for each member
     const allSessionsData = await Promise.allSettled(
@@ -48,15 +39,15 @@ export default withApiAuthRequired(async function handler(
           return {
             userId: member.user_id,
             userEmail: member.email,
-            userName: member.name,
+            userName: member.name || member.email,
             sessions: userSessions
           };
-        } catch (error) {
+        } catch (error: any) {
           console.error(`Failed to get sessions for user ${member.user_id}:`, error);
           return {
             userId: member.user_id,
             userEmail: member.email,
-            userName: member.name,
+            userName: member.name || member.email,
             sessions: [],
             error: error.message
           };
@@ -67,10 +58,18 @@ export default withApiAuthRequired(async function handler(
     // Process results and flatten sessions
     const organizationSessions: any[] = [];
     let totalActiveSessions = 0;
+    let currentUserSessions = 0;
 
     allSessionsData.forEach((result) => {
       if (result.status === 'fulfilled' && result.value.sessions.length > 0) {
         result.value.sessions.forEach((session) => {
+          const isCurrentUser = result.value.userId === user.sub;
+          const isCurrentSession = session.id === currentSessionId;
+          
+          if (isCurrentUser) {
+            currentUserSessions++;
+          }
+
           organizationSessions.push({
             id: session.id,
             userId: result.value.userId,
@@ -86,10 +85,10 @@ export default withApiAuthRequired(async function handler(
               ipAddress: session.device?.last_ip || session.device?.initial_ip,
               asn: session.device?.last_asn || session.device?.initial_asn
             },
-            clients: session.clients,
-            authentication: session.authentication,
-            isCurrentUser: result.value.userId === user.sub,
-            isCurrentSession: session.id === session.user?.['https://agency-inc-demo.com/session_id']
+            clients: session.clients || [],
+            authentication: session.authentication || { methods: [] },
+            isCurrentUser,
+            isCurrentSession
           });
           totalActiveSessions++;
         });
@@ -101,19 +100,32 @@ export default withApiAuthRequired(async function handler(
       new Date(b.lastInteracted).getTime() - new Date(a.lastInteracted).getTime()
     );
 
-    console.log(`📊 Found ${totalActiveSessions} total active sessions across ${members.length} users`);
+    // Count unique users with active sessions
+    const uniqueUsers = new Set(organizationSessions.map(s => s.userId)).size;
 
-    res.status(200).json({
+    return Response.json({
       success: true,
       sessions: organizationSessions,
-      count: totalActiveSessions,
+      stats: {
+        totalSessions: totalActiveSessions,
+        uniqueUsers,
+        currentUserSessions,
+        organizationMembers: members.length
+      },
       organizationId: orgId,
-      memberCount: members.length,
-      currentSessionId: session.user['https://agency-inc-demo.com/session_id'],
-      currentUserId: user.sub
+      currentSessionId,
+      userId: user.sub
     });
-  } catch (error) {
+    
+  } catch (error: any) {
     console.error('Organization session list error:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
+    return Response.json(
+      { 
+        success: false,
+        error: 'Internal server error', 
+        details: error.message 
+      },
+      { status: 500 }
+    );
   }
-});
+}

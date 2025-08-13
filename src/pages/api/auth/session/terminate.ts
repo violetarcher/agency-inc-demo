@@ -46,8 +46,8 @@ export default withApiAuthRequired(async function handler(
       sessionId,
       wasOwnSession: sessionId === currentSessionId // NEW: Additional info
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Session termination error:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
+    res.status(500).json({ error: 'Internal server error', details: error?.message });
   }
 });

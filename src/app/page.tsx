@@ -1,3 +1,6 @@
+'use client';
+
+import { useUser } from '@auth0/nextjs-auth0/client';
 import {
   Card,
   CardContent,
@@ -14,7 +17,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { DollarSign, FileText, CheckCircle, Clock } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { DollarSign, FileText, CheckCircle, Clock, LogIn, AlertTriangle } from "lucide-react"
 
 // Fictitious data for the dashboard
 const kpiData = [
@@ -33,12 +38,75 @@ const recentReports = [
 ];
 
 export default function HomePage() {
+  const { user, error, isLoading } = useUser();
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8">
+            <div className="flex items-center justify-center gap-2">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <span>Loading...</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Alert variant="destructive" className="max-w-md">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Authentication error: {error.message}
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  // Not logged in - show login prompt
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="flex items-center justify-center gap-2 text-2xl">
+              <FileText className="h-6 w-6 text-blue-600" />
+              Agency Inc Dashboard
+            </CardTitle>
+            <CardDescription>
+              Please log in to access your dashboard and manage your reports.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center space-y-4">
+            <p className="text-gray-600">
+              You need to be logged in to view your dashboard, submit reports, and track expenses.
+            </p>
+            <Button asChild size="lg" className="w-full">
+              <a href="/api/auth/login" className="flex items-center justify-center gap-2">
+                <LogIn className="h-4 w-4" />
+                Log In to Continue
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // User is logged in - show dashboard
   return (
     <div className="flex flex-col gap-8">
       <header>
         <h1 className="text-3xl font-bold">Dashboard Overview</h1>
         <p className="text-muted-foreground">
-          Welcome to your central hub.
+          Welcome back, {user.name || user.email}! Here's your central hub.
         </p>
       </header>
 

@@ -41,8 +41,8 @@ export default withApiAuthRequired(async function handler(
         ? `Terminated ${result.terminatedCount} other session(s)`
         : 'No other sessions found'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Session limit enforcement error:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
+    res.status(500).json({ error: 'Internal server error', details: error?.message });
   }
 });

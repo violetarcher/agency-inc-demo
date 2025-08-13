@@ -45,7 +45,7 @@ export function ReportDashboard({ permissions }: ReportDashboardProps) {
     fetchReports();
 
     // Check for our explicit 'stepup_complete' parameter to trigger post-MFA actions
-    if (searchParams.get('stepup_complete') === 'true') {
+    if (searchParams?.get('stepup_complete') === 'true') {
       const action = sessionStorage.getItem('post_stepup_action');
       if (action) {
         const { actionType, reportId, reportTitle } = JSON.parse(action);

@@ -1,7 +1,8 @@
 import { handleAuth, handleLogin, handleLogout, handleCallback } from '@auth0/nextjs-auth0';
+import { NextApiRequest, NextApiResponse } from 'next';
 
 export default handleAuth({
-  login: async (req, res) => {
+  login: async (req: NextApiRequest, res: NextApiResponse) => {
     try {
       const isStepUp = req.query.stepup === 'true';
       const hasInvitation = !!req.query.invitation; // Check if it's an invitation
@@ -30,7 +31,7 @@ export default handleAuth({
     }
   },
 
-  logout: async (req, res) => {
+  logout: async (req: NextApiRequest, res: NextApiResponse) => {
     try {
       await handleLogout(req, res, {
         returnTo: process.env.AUTH0_BASE_URL
@@ -41,7 +42,7 @@ export default handleAuth({
     }
   },
 
-  callback: async (req, res) => {
+  callback: async (req: NextApiRequest, res: NextApiResponse) => {
     try {
       await handleCallback(req, res);
     } catch (error: any) {
