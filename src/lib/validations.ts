@@ -34,14 +34,12 @@ export const reportIdSchema = z.object({
 
 export const createReportSchema = z.object({
   title: z.string().min(1, 'Title is required').max(100),
-  content: z.string().min(1, 'Content is required'),
-  category: z.string().min(1, 'Category is required'),
+  amount: z.number().min(0, 'Amount must be positive'),
 });
 
 export const updateReportSchema = z.object({
   title: z.string().min(1, 'Title is required').max(100).optional(),
-  content: z.string().min(1, 'Content is required').optional(),
-  category: z.string().min(1, 'Category is required').optional(),
+  amount: z.number().min(0, 'Amount must be positive').optional(),
 });
 
 // Access request schema

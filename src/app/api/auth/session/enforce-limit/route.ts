@@ -1,20 +1,12 @@
-// src/pages/api/auth/session/enforce-limit.ts
-import { NextApiRequest, NextApiResponse } from 'next';
+import { NextRequest } from 'next/server';
 import { getSession, withApiAuthRequired } from '@auth0/nextjs-auth0';
-import { Auth0SessionManager } from '../../../../lib/auth0-session-manager';
+import { Auth0SessionManager } from '@/lib/auth0-session-manager';
 
-export default withApiAuthRequired(async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
+export const POST = withApiAuthRequired(async function POST(request: NextRequest) {
   try {
-    const session = await getSession(req, res);
+    const session = await getSession();
     if (!session) {
-      return res.status(401).json({ error: 'No session found' });
+      return Response.json({ error: 'No session found' }, { status: 401 });
     }
 
     const { user } = session;
@@ -22,7 +14,7 @@ export default withApiAuthRequired(async function handler(
     
     // Check if user is admin
     if (!roles.includes('Admin')) {
-      return res.status(403).json({ error: 'Admin access required' });
+      return Response.json({ error: 'Admin access required' }, { status: 403 });
     }
 
     const currentSessionId = session.user['https://agency-inc-demo.com/session_id'];
@@ -33,7 +25,7 @@ export default withApiAuthRequired(async function handler(
       currentSessionId
     );
 
-    res.status(200).json({
+    return Response.json({
       success: true,
       terminatedCount: result.terminatedCount,
       remainingSession: result.remainingSession?.id,
@@ -43,6 +35,12 @@ export default withApiAuthRequired(async function handler(
     });
   } catch (error: any) {
     console.error('Session limit enforcement error:', error);
-    res.status(500).json({ error: 'Internal server error', details: error?.message });
+    return Response.json(
+      { 
+        error: 'Internal server error', 
+        details: error?.message 
+      },
+      { status: 500 }
+    );
   }
 });

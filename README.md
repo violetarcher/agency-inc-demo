@@ -38,8 +38,9 @@ The application serves as a robust template for building multi-tenant, secure, a
 - **Multi-Tenant Logins**: Organization-specific authentication flows
 - **Custom Login Experience**: In-app organization selection
 - **Invitation-Based Sign-up**: Secure admin-managed onboarding
-- **Federated Session Management**: Coordinated logout across services
-- **Back-Channel Logout**: Real-time session revocation
+- **Single Session Enforcement**: Automatic termination of concurrent sessions
+- **Real-Time Session Validation**: Continuous session monitoring every 5 seconds
+- **Back-Channel Logout**: Reliable session revocation with proper parsing
 - **Session Monitoring**: Active session tracking and management
 
 ### 🛡️ Authorization & Security
@@ -87,10 +88,13 @@ src/
 ├── components/            # Reusable React components
 │   ├── ui/               # shadcn/ui components
 │   ├── admin/            # Admin-specific components
+│   ├── session-validator.tsx # Real-time session validation component
+│   ├── session-enforcer.tsx  # Single session enforcement component
 │   └── loading.tsx       # Loading state components
 ├── lib/                  # Utilities and configurations
 │   ├── validations.ts    # Zod validation schemas
-│   ├── session-revocation.ts # Session management
+│   ├── session-revocation.ts # File-based session revocation storage
+│   ├── auth0-session-manager.ts # Auth0 session enforcement logic
 │   ├── api-client.ts     # Type-safe API client
 │   └── auth0-*.ts        # Auth0 integrations
 └── pages/                # Legacy Pages Router (Auth0 handlers)
@@ -99,29 +103,34 @@ src/
 
 ## 🔧 Recent Improvements
 
+### Session Management & Security ✨
+- **Fixed SessionValidator Component**: Resolved component mounting issues by separating validation and enforcement
+- **Single Session Enforcement**: Implemented automatic termination of concurrent user sessions
+- **Real-Time Session Monitoring**: Continuous validation every 5 seconds with automatic logout
+- **Enhanced Back-Channel Logout**: Fixed parsing to handle both JSON and form-encoded data from Auth0
+- **Persistent Session Revocation**: File-based storage for terminated sessions that survives server restarts
+- **Dual Component Architecture**: Separate `SessionValidator` and `SessionEnforcer` for clean separation of concerns
+
 ### API Migration to App Router
 - Migrated core API routes from Pages Router to App Router
 - Implemented comprehensive Zod validation schemas
 - Added proper TypeScript types throughout
 - Improved error handling and response consistency
-
-### Enhanced Session Management
-- Implemented file-based persistent session storage
-- Fixed back-channel logout functionality
-- Added real-time session monitoring
-- Created admin session management interface
+- Fixed compatibility issues with App Router authentication patterns
 
 ### Developer Experience
-- Added error boundaries for graceful error handling
+- Added comprehensive debug logging throughout session management
 - Implemented loading states and skeleton components
 - Created comprehensive validation schemas
 - Improved type safety across the application
+- Added error boundaries for graceful error handling
 
 ### Security Enhancements
 - Server-side input validation with Zod
-- Persistent session revocation system
+- Persistent session revocation system with local file storage
 - Enhanced error handling without information leakage
 - Comprehensive authorization checks
+- Protected session enforcement endpoints
 
 ## 🚦 Getting Started
 
@@ -245,9 +254,11 @@ npm run lint    # Run ESLint
 
 ### Authentication
 - `GET /api/auth/[auth0]` - Auth0 authentication handler
-- `POST /api/auth/backchannel-logout` - Back-channel logout webhook
-- `GET /api/auth/session/validate` - Session validation
-- `GET /api/auth/session/list` - Active sessions list
+- `POST /api/auth/backchannel-logout` - Back-channel logout webhook (supports JSON & form data)
+- `GET /api/auth/session/validate` - Real-time session validation with revocation checking
+- `GET /api/auth/session/list` - Active sessions list for admin dashboard
+- `POST /api/auth/session/enforce-my-limit` - Single session enforcement endpoint
+- `POST /api/auth/session/terminate` - Manual session termination
 
 ### Organization Management
 - `GET|POST /api/organization/members` - Member CRUD operations

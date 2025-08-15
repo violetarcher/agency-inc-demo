@@ -1,15 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 
-// File-based storage for revoked sessions
-const REVOKED_SESSIONS_FILE = path.join(process.cwd(), '.next', 'revoked-sessions.json');
+// File-based storage for revoked sessions - use a persistent location outside .next
+const REVOKED_SESSIONS_FILE = path.join(process.cwd(), 'revoked-sessions.json');
 
-// Ensure the .next directory exists
+// Ensure the revoked sessions file exists
 function ensureFileExists() {
-  const dir = path.dirname(REVOKED_SESSIONS_FILE);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
   if (!fs.existsSync(REVOKED_SESSIONS_FILE)) {
     fs.writeFileSync(REVOKED_SESSIONS_FILE, JSON.stringify([]));
   }
@@ -19,10 +15,14 @@ function ensureFileExists() {
 function loadRevokedSessions(): Set<string> {
   try {
     ensureFileExists();
+    console.log(`📁 Loading revoked sessions from: ${REVOKED_SESSIONS_FILE}`);
     const data = fs.readFileSync(REVOKED_SESSIONS_FILE, 'utf-8');
+    console.log(`📁 Raw file content: ${data}`);
     const sessions = JSON.parse(data);
+    console.log(`📁 Parsed sessions:`, sessions);
     return new Set(sessions);
   } catch (error) {
+    console.error(`❌ Error loading revoked sessions:`, error);
     return new Set();
   }
 }
@@ -39,15 +39,19 @@ function saveRevokedSessions(sessions: Set<string>) {
 
 // Function to add revoked session
 export function addRevokedSession(sessionId: string) {
+  console.log(`🔒 Adding session to revoked list: ${sessionId}`);
   const revokedSessions = loadRevokedSessions();
   revokedSessions.add(sessionId);
   saveRevokedSessions(revokedSessions);
+  console.log(`🔒 Total revoked sessions: ${revokedSessions.size}`);
 }
 
 // Function to check if session is revoked
 export function isSessionRevoked(sessionId: string): boolean {
   const revokedSessions = loadRevokedSessions();
-  return revokedSessions.has(sessionId);
+  const isRevoked = revokedSessions.has(sessionId);
+  console.log(`🔍 Checking revoked session: ${sessionId} = ${isRevoked} (total revoked: ${revokedSessions.size})`);
+  return isRevoked;
 }
 
 // Function to remove session from revoked list (for cleanup)

@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,39 +9,21 @@ import Link from 'next/link';
 
 export default function AnalyticsPage() {
   const { user, isLoading: userLoading } = useUser();
-  const [isRequestingAccess, setIsRequestingAccess] = useState(false);
 
   const roles = user?.['https://agency-inc-demo.com/roles'] as string[] || [];
   const hasAnalyticsAccess = roles.includes('Data Analyst');
 
-  const handleRequestAccess = async () => {
-    setIsRequestingAccess(true);
-    try {
-      const accessRequest = {
-        role: 'Data Analyst',
-        reason: 'Request access to view analytics dashboard and reporting data'
-      };
-
-      const response = await fetch('/api/request-access', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ accessRequest }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to submit access request.');
-      }
-
-      alert('Access request submitted successfully! You will be notified when approved.');
-      setIsRequestingAccess(false);
-
-    } catch (error) {
-      console.error('Error requesting access:', error);
-      alert('An error occurred. Please try again.');
-      setIsRequestingAccess(false);
-    }
+  const handleRequestAccess = () => {
+    // Redirect to auth login with access request parameters
+    // This will trigger the Auth0 Action which handles the metadata update and Slack webhook
+    const accessRequestParams = new URLSearchParams({
+      returnTo: '/analytics',
+      access_request: 'true',
+      requested_role: 'Data Analyst',
+      reason: 'Request access to view analytics dashboard and reporting data'
+    });
+    
+    window.location.href = `/api/auth/login?${accessRequestParams.toString()}`;
   };
 
   // Renders the full dashboard for authorized users
@@ -143,8 +124,8 @@ export default function AnalyticsPage() {
               <p className="text-muted-foreground mb-6">
                 Request access from your administrator to gain Data Analyst permissions.
               </p>
-              <Button onClick={handleRequestAccess} disabled={isRequestingAccess} size="lg">
-                {isRequestingAccess ? 'Requesting Access...' : 'Requesting Access'}
+              <Button onClick={handleRequestAccess} size="lg">
+                Request Access
               </Button>
             </CardContent>
           </Card>

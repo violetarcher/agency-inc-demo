@@ -1,4 +1,5 @@
 // src/lib/auth0-session-manager.ts
+import { addRevokedSession } from './session-revocation';
 export interface Auth0Session {
   id: string;
   user_id: string;
@@ -97,6 +98,9 @@ export class Auth0SessionManager {
       }
       
       console.log(`Session ${sessionId} deleted successfully`);
+      
+      // Add session to local revoked sessions list
+      addRevokedSession(sessionId);
     } catch (error) {
       console.error(`Error deleting session ${sessionId}:`, error);
       throw error;
@@ -111,9 +115,12 @@ export class Auth0SessionManager {
     remainingSession: Auth0Session | null;
   }> {
     try {
+      console.log(`🔥 Getting sessions for user: ${userId}`);
       const sessions = await this.getUserSessions(userId);
+      console.log(`🔥 Found ${sessions.length} sessions:`, sessions.map(s => ({ id: s.id, created_at: s.created_at })));
       
       if (sessions.length <= 1) {
+        console.log(`🔥 Only ${sessions.length} session(s), no enforcement needed`);
         return {
           terminatedCount: 0,
           remainingSession: sessions[0] || null
@@ -132,18 +139,24 @@ export class Auth0SessionManager {
         // Keep the specified current session
         sessionToKeep = sortedSessions.find(s => s.id === currentSessionId) || sortedSessions[0];
         sessionsToDelete = sortedSessions.filter(s => s.id !== sessionToKeep.id);
+        console.log(`🔥 Keeping current session: ${sessionToKeep.id}`);
       } else {
         // Keep the newest session
         sessionToKeep = sortedSessions[0];
         sessionsToDelete = sortedSessions.slice(1);
+        console.log(`🔥 Keeping newest session: ${sessionToKeep.id}`);
       }
+      
+      console.log(`🔥 Sessions to delete:`, sessionsToDelete.map(s => s.id));
 
       // Delete old sessions
-      const deletePromises = sessionsToDelete.map(session => 
-        this.deleteSession(session.id)
-      );
+      const deletePromises = sessionsToDelete.map(session => {
+        console.log(`🔥 Deleting session: ${session.id}`);
+        return this.deleteSession(session.id);
+      });
       await Promise.all(deletePromises);
 
+      console.log(`🔥 Successfully terminated ${sessionsToDelete.length} sessions`);
       return {
         terminatedCount: sessionsToDelete.length,
         remainingSession: sessionToKeep

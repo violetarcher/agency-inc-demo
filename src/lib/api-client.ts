@@ -84,6 +84,45 @@ class ApiClient {
     });
   }
 
+  // Reports
+  async getReports() {
+    return this.request('/api/reports');
+  }
+
+  async createReport(data: { title: string; amount: number }) {
+    return this.request('/api/reports', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateReport(reportId: string, data: { title?: string; amount?: number }) {
+    return this.request(`/api/reports/${reportId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteReport(reportId: string) {
+    return this.request(`/api/reports/${reportId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Session management (additional)
+  async enforceSessionLimit() {
+    return this.request('/api/auth/session/enforce-limit', {
+      method: 'POST',
+    });
+  }
+
+  async terminateSession(sessionId: string) {
+    return this.request('/api/auth/session/terminate', {
+      method: 'DELETE',
+      body: JSON.stringify({ sessionId }),
+    });
+  }
+
   // Generic methods
   get<T = any>(url: string): Promise<T> {
     return this.request<T>(url, { method: 'GET' });
