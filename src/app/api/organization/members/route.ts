@@ -90,12 +90,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Using connection for invitation:', {
-      connection_id: signupConnection.connection_id,
-      connection_name: signupConnection.connection?.name,
-      is_signup_enabled: signupConnection.is_signup_enabled,
-      assign_membership_on_login: signupConnection.assign_membership_on_login
-    });
 
     const invitation = await managementClient.organizations.createInvitation(
       { id: orgId },
@@ -107,7 +101,6 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    console.log('Invitation created with URL:', invitation.data);
     return Response.json(invitation.data, { status: 201 });
   } catch (error: any) {
     console.error('Failed to invite member:', error);

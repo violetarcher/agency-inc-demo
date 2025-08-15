@@ -10,8 +10,11 @@ export async function Sidebar() {
   const session = await getSession();
   const user = session?.user;
   const roles = user?.['https://agency-inc-demo.com/roles'] || [];
-  const companyName = "SaaS+";
-  const logoUrl = "https://auth0images.s3.us-east-2.amazonaws.com/Auth0+Official+Icons/auth0-identicons/icon-api.png";
+  
+  const orgName = user?.['https://agency-inc-demo.com/org_name'] || '';
+  const orgLogo = user?.['https://agency-inc-demo.com/org_logo'];
+  const companyName = orgName ? `SaaS+ | ${orgName}` : 'SaaS+';
+  const logoUrl = orgLogo || "https://auth0images.s3.us-east-2.amazonaws.com/Auth0+Official+Icons/auth0-identicons/icon-api.png";
 
   return (
     <aside className="hidden w-64 flex-col border-r bg-background p-4 md:flex">

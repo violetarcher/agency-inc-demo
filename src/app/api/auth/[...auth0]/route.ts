@@ -9,13 +9,6 @@ export const GET = handleAuth({
       const hasInvitation = !!url.searchParams.get('invitation');
       const isAccessRequest = url.searchParams.get('access_request') === 'true';
       
-      console.log('Auth0 login params:', {
-        hasInvitation,
-        invitation: url.searchParams.get('invitation'),
-        isStepUp,
-        isAccessRequest,
-        allParams: Object.fromEntries(url.searchParams)
-      });
       
       const authorizationParams: any = {
         audience: process.env.AUTH0_AUDIENCE,
@@ -61,10 +54,6 @@ export const GET = handleAuth({
           authorizationParams.organization = organization;
         }
         
-        console.log('Adding invitation params to Auth0:', {
-          invitation,
-          organization
-        });
       }
       
       return await handleLogin(req, ctx, { authorizationParams });
