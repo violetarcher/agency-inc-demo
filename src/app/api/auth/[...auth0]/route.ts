@@ -9,6 +9,14 @@ export const GET = handleAuth({
       const hasInvitation = !!url.searchParams.get('invitation');
       const isAccessRequest = url.searchParams.get('access_request') === 'true';
       
+      console.log('Auth0 login params:', {
+        hasInvitation,
+        invitation: url.searchParams.get('invitation'),
+        isStepUp,
+        isAccessRequest,
+        allParams: Object.fromEntries(url.searchParams)
+      });
+      
       const authorizationParams: any = {
         audience: process.env.AUTH0_AUDIENCE,
         scope: 'openid profile email offline_access read:reports create:reports edit:reports delete:reports read:analytics',
@@ -39,6 +47,24 @@ export const GET = handleAuth({
       } else if (!hasInvitation && !isAccessRequest) {
         // Add prompt=login for standard logins, but NOT for invitations or access requests
         authorizationParams.prompt = 'login';
+      }
+
+      // For organization invitations, pass the invitation and organization parameters
+      if (hasInvitation) {
+        const invitation = url.searchParams.get('invitation');
+        const organization = url.searchParams.get('organization');
+        
+        if (invitation) {
+          authorizationParams.invitation = invitation;
+        }
+        if (organization) {
+          authorizationParams.organization = organization;
+        }
+        
+        console.log('Adding invitation params to Auth0:', {
+          invitation,
+          organization
+        });
       }
       
       return await handleLogin(req, ctx, { authorizationParams });

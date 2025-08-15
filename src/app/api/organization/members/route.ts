@@ -75,15 +75,39 @@ export async function POST(request: NextRequest) {
 
     const { email } = validationResult.data;
 
+    // Get the organization's enabled connections
+    const connections = await managementClient.organizations.getEnabledConnections({ id: orgId });
+    
+    // Find a database connection that supports signup
+    const signupConnection = connections.data.find(conn => 
+      conn.connection?.strategy === 'auth0' && conn.is_signup_enabled
+    );
+
+    if (!signupConnection) {
+      return Response.json(
+        { error: 'No signup-enabled database connection found for this organization' },
+        { status: 400 }
+      );
+    }
+
+    console.log('Using connection for invitation:', {
+      connection_id: signupConnection.connection_id,
+      connection_name: signupConnection.connection?.name,
+      is_signup_enabled: signupConnection.is_signup_enabled,
+      assign_membership_on_login: signupConnection.assign_membership_on_login
+    });
+
     const invitation = await managementClient.organizations.createInvitation(
       { id: orgId },
       {
         invitee: { email },
         inviter: { name: user?.name || 'Administrator' },
         client_id: process.env.AUTH0_CLIENT_ID!,
+        connection_id: signupConnection.connection_id,
       }
     );
 
+    console.log('Invitation created with URL:', invitation.data);
     return Response.json(invitation.data, { status: 201 });
   } catch (error: any) {
     console.error('Failed to invite member:', error);
