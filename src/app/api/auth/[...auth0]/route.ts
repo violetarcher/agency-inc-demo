@@ -34,9 +34,15 @@ export const GET = handleAuth({
         authorizationParams.access_request = 'true';
       }
 
+      // Handle prompt parameter from URL
+      const promptParam = url.searchParams.get('prompt');
+      
       if (isStepUp) {
         // Add MFA params for step-up
         authorizationParams.acr_values = 'http://schemas.openid.net/pape/policies/2007/06/multi-factor';
+      } else if (promptParam) {
+        // Use explicit prompt parameter if provided (e.g., prompt=none for silent auth)
+        authorizationParams.prompt = promptParam;
       } else if (!hasInvitation && !isAccessRequest) {
         // Add prompt=login for standard logins, but NOT for invitations or access requests
         authorizationParams.prompt = 'login';

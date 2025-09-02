@@ -12,18 +12,62 @@ export default function AnalyticsPage() {
 
   const roles = user?.['https://agency-inc-demo.com/roles'] as string[] || [];
   const hasAnalyticsAccess = roles.includes('Data Analyst');
+  
+  // Check for pending access request in user metadata - try different possible locations
+  const pendingAccessRequest = user?.['https://agency-inc-demo.com/app_metadata']?.pending_access_request || 
+                               user?.app_metadata?.pending_access_request ||
+                               user?.['https://agency-inc-demo.com/pending_access_request'];
+  
+  // Debug: Log user object to see what metadata is available
+  console.log('User object:', user);
+  console.log('Pending access request:', pendingAccessRequest);
+  
 
-  const handleRequestAccess = () => {
-    // Redirect to auth login with access request parameters
-    // This will trigger the Auth0 Action which handles the metadata update and Slack webhook
-    const accessRequestParams = new URLSearchParams({
-      returnTo: '/analytics',
-      access_request: 'true',
-      requested_role: 'Data Analyst',
-      reason: 'Request access to view analytics dashboard and reporting data'
-    });
-    
-    window.location.href = `/api/auth/login?${accessRequestParams.toString()}`;
+  const handleRequestAccess = async () => {
+    try {
+      // First, submit the access request via API to set user metadata
+      const response = await fetch('/api/request-access', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          role: 'Data Analyst',
+          reason: 'Request access to view analytics dashboard and reporting data'
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        // If successful, trigger silent re-authentication to fire Auth0 Action
+        if (data.next_step === 'logout_and_login') {
+          // Use hidden iframe for silent authentication to trigger Auth0 Action
+          const iframe = document.createElement('iframe');
+          iframe.style.display = 'none';
+          iframe.src = '/api/auth/login?access_request=true&prompt=none&returnTo=' + encodeURIComponent('/analytics');
+          
+          iframe.onload = () => {
+            // After silent auth completes, refresh the current page to get updated permissions
+            window.location.reload();
+          };
+          
+          iframe.onerror = () => {
+            // If silent auth fails, fallback to manual login
+            window.location.href = '/api/auth/login?access_request=true&returnTo=' + encodeURIComponent('/analytics');
+          };
+          
+          document.body.appendChild(iframe);
+        }
+      } else {
+        const error = await response.json();
+        console.error('Access request failed:', error);
+        alert('Failed to submit access request: ' + (error.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Access request error:', error);
+      alert('Failed to submit access request. Please try again.');
+    }
   };
 
   // Renders the full dashboard for authorized users
@@ -121,12 +165,33 @@ export default function AnalyticsPage() {
               <CardDescription>Access reporting analytics and data insights</CardDescription>
             </CardHeader>
             <CardContent className="text-center">
-              <p className="text-muted-foreground mb-6">
-                Request access from your administrator to gain Data Analyst permissions.
-              </p>
-              <Button onClick={handleRequestAccess} size="lg">
-                Request Access
-              </Button>
+              {pendingAccessRequest ? (
+                <>
+                  <Alert className="mb-6">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      Your access request for "{pendingAccessRequest.role}" is pending review.
+                      <br />
+                      Submitted: {new Date(pendingAccessRequest.requested_at).toLocaleDateString()}
+                    </AlertDescription>
+                  </Alert>
+                  <p className="text-muted-foreground mb-6">
+                    Your administrator has been notified. You'll receive updated permissions once approved.
+                  </p>
+                  <Button disabled size="lg">
+                    Request Pending
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-muted-foreground mb-6">
+                    Request access from your administrator to gain Data Analyst permissions.
+                  </p>
+                  <Button onClick={handleRequestAccess} size="lg">
+                    Request Access
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
