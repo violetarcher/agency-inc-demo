@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { email } = validationResult.data;
+    const { email, roles: inviteRoles } = validationResult.data;
 
     // Get the organization's enabled connections
     const connections = await managementClient.organizations.getEnabledConnections({ id: orgId });
@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
         inviter: { name: user?.name || 'Administrator' },
         client_id: process.env.AUTH0_CLIENT_ID!,
         connection_id: signupConnection.connection_id,
+        ...(inviteRoles && inviteRoles.length > 0 && { roles: inviteRoles }),
       }
     );
 

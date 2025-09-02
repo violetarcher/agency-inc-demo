@@ -43,7 +43,10 @@ export function MemberManager({ initialMembers, availableRoles }: MemberManagerP
     const response = await fetch('/api/organization/members', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: inviteEmail }),
+      body: JSON.stringify({ 
+        email: inviteEmail,
+        ...(selectedInviteRole && { roles: [selectedInviteRole] })
+      }),
     });
 
     if (response.ok) {
@@ -165,6 +168,18 @@ export function MemberManager({ initialMembers, availableRoles }: MemberManagerP
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
             />
+            <Select value={selectedInviteRole} onValueChange={setSelectedInviteRole}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a role (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableRoles.map(role => (
+                  <SelectItem key={role.id} value={role.id}>
+                    {role.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsInviteDialogOpen(false)}>Cancel</Button>
