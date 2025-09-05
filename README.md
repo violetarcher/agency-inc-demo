@@ -396,6 +396,20 @@ exports.onExecutePostLogin = async (event, api) => {
 - Configure auto-membership settings
 - Add enabled connections (Database, Social, etc.)
 
+#### 5a. Configure Organization Branding (Optional)
+- In your Auth0 Organization settings, go to the **Metadata** tab
+- Add organization branding metadata:
+  ```json
+  {
+    "url": "https://organization-logo.png"
+  }
+  ```
+- **Logo Hosting Options:**
+  - **S3** (recommended): Upload to AWS S3 with public read access
+  - **Any CDN/hosting**: Cloudinary, imgix, or any public image hosting service
+  - **Direct upload**: Any publicly accessible HTTPS URL
+- The application will display this logo in the organization branding section
+
 #### 6. Deploy Auth0 Actions (CRITICAL)
 - Go to **Actions > Flows**
 - Select **Login** flow
