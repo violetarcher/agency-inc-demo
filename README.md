@@ -327,8 +327,8 @@ exports.onExecutePostLogin = async (event, api) => {
 
 3. **Set up environment variables**
    ```bash
-   cp .env.example .env.local
-   # Edit .env.local with your Auth0, Firebase, and other credentials
+   # Create .env.local with your Auth0, Firebase, and other credentials
+   # See Environment Variables section below for complete configuration
    ```
 
 4. **Configure Auth0** (see detailed setup below)
