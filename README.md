@@ -124,10 +124,6 @@ src/
 ```javascript
 const { IncomingWebhook } = require("@slack/webhook");
 
-/**
-* @param {Event} event - Details about the user and the context in which they are logging in.
-* @param {PostLoginAPI} api - Interface whose methods can be used to change the behavior of the login flow.
-*/
 exports.onExecutePostLogin = async (event, api) => {
   const webhook = new IncomingWebhook(event.secrets.SLACK_WEBHOOK_URL);
   const namespace = 'https://agency-inc-demo.com';
@@ -276,10 +272,7 @@ exports.onExecutePostLogin = async (event, api) => {
 **Name**: `Step-up MFA Enforcement`
 
 ```javascript
-/**
-* @param {Event} event - Details about the user and the context in which they are logging in.
-* @param {MfaApi} api - Interface whose methods can be used to change the behavior of the login flow.
-*/
+
 exports.onExecutePostLogin = async (event, api) => {
   // Check if the application is requesting MFA via the `acr_values` parameter.
   // This is the parameter our "Delete" button flow sends.
