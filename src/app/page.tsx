@@ -19,22 +19,22 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { DollarSign, FileText, CheckCircle, Clock, LogIn, AlertTriangle } from "lucide-react"
+import { ShoppingCart, Package, TrendingUp, Store, LogIn, AlertTriangle, DollarSign } from "lucide-react"
 
 // Fictitious data for the dashboard
 const kpiData = [
-  { title: "Monthly Expenses", value: "$12,450", change: "+5.2%", icon: DollarSign, color: "text-green-500" },
-  { title: "Reports Submitted", value: "82", change: "+10", icon: FileText, color: "text-blue-500" },
-  { title: "Pending Approval", value: "7", change: "-2", icon: Clock, color: "text-yellow-500" },
-  { title: "Approved This Month", value: "75", change: "+12", icon: CheckCircle, color: "text-green-500" },
+  { title: "Monthly Revenue", value: "$2.4M", change: "+18.2%", icon: TrendingUp, color: "text-green-600" },
+  { title: "Orders This Month", value: "342", change: "+24", icon: ShoppingCart, color: "text-blue-600" },
+  { title: "Active Retail Partners", value: "156", change: "+8", icon: Store, color: "text-purple-600" },
+  { title: "Items Shipped", value: "8,450", change: "+156", icon: Package, color: "text-amber-600" },
 ];
 
-const recentReports = [
-  { id: "REP-001", user: "Elena Rodriguez", amount: 450.00, status: "Approved" },
-  { id: "REP-002", user: "Marcus Chen", amount: 125.50, status: "Pending" },
-  { id: "REP-003", user: "Sophie Dubois", amount: 890.75, status: "Approved" },
-  { id: "REP-004", user: "Ben Carter", amount: 320.00, status: "Rejected" },
-  { id: "REP-005", user: "Elena Rodriguez", amount: 65.00, status: "Pending" },
+const recentOrders = [
+  { id: "ORD-2847", customer: "Pebble Beach Pro Shop", items: "Golf Balls, Gloves", amount: 12450.00, status: "Shipped" },
+  { id: "ORD-2848", customer: "Golf Galaxy - Denver", items: "Titleist Clubs, Bags", amount: 34580.50, status: "Processing" },
+  { id: "ORD-2849", customer: "PGA Superstore - Miami", items: "FootJoy Apparel", amount: 18920.00, status: "Shipped" },
+  { id: "ORD-2850", customer: "Torrey Pines Golf Club", items: "Range Balls, Tees", amount: 5640.00, status: "Delivered" },
+  { id: "ORD-2851", customer: "Dick's Sporting Goods", items: "Vokey Wedges", amount: 28750.00, status: "Processing" },
 ];
 
 export default function HomePage() {
@@ -77,16 +77,16 @@ export default function HomePage() {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle className="flex items-center justify-center gap-2 text-2xl">
-              <FileText className="h-6 w-6 text-blue-600" />
-              Agency Inc Dashboard
+              <Package className="h-6 w-6 text-green-600" />
+              GolfClub Pro Dashboard
             </CardTitle>
             <CardDescription>
-              Please log in to access your dashboard and manage your reports.
+              Please log in to access your golf equipment distribution portal.
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center space-y-4">
             <p className="text-gray-600">
-              You need to be logged in to view your dashboard, submit reports, and track expenses.
+              You need to be logged in to manage orders, inventory, and retail partners.
             </p>
             <Button asChild size="lg" className="w-full">
               <a href="/api/auth/login" className="flex items-center justify-center gap-2">
@@ -103,11 +103,19 @@ export default function HomePage() {
   // User is logged in - show dashboard
   return (
     <div className="flex flex-col gap-8">
-      <header>
-        <h1 className="text-3xl font-bold">Dashboard Overview</h1>
-        <p className="text-muted-foreground">
-          Welcome back, {user.name || user.email}! Here's your central hub.
-        </p>
+      <header className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Equipment Sales Dashboard</h1>
+          <p className="text-muted-foreground">
+            Welcome back, {user.name || user.email}! Here's your B2B sales overview.
+          </p>
+        </div>
+        <Button asChild size="lg">
+          <a href="http://localhost:4040/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4" />
+            Go to Billing
+          </a>
+        </Button>
       </header>
 
       {/* KPI Cards */}
@@ -130,30 +138,34 @@ export default function HomePage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         <Card className="lg:col-span-4">
           <CardHeader>
-            <CardTitle>Recent Reports</CardTitle>
-            <CardDescription>A list of the 5 most recently submitted reports.</CardDescription>
+            <CardTitle>Recent Orders</CardTitle>
+            <CardDescription>The 5 most recent B2B equipment orders.</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Report ID</TableHead>
-                  <TableHead>Submitted By</TableHead>
+                  <TableHead>Order ID</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Items</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recentReports.map((report) => (
-                  <TableRow key={report.id}>
-                    <TableCell className="font-medium">{report.id}</TableCell>
-                    <TableCell>{report.user}</TableCell>
-                    <TableCell className="text-right">${report.amount.toFixed(2)}</TableCell>
+                {recentOrders.map((order) => (
+                  <TableRow key={order.id}>
+                    <TableCell className="font-medium">{order.id}</TableCell>
+                    <TableCell>{order.customer}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{order.items}</TableCell>
+                    <TableCell className="text-right">${order.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</TableCell>
                     <TableCell className="text-center">
                        <Badge variant={
-                          report.status === 'Approved' ? 'default' : report.status === 'Pending' ? 'secondary' : 'destructive'
+                          order.status === 'Delivered' ? 'default' :
+                          order.status === 'Shipped' ? 'secondary' :
+                          'outline'
                        }>
-                        {report.status}
+                        {order.status}
                        </Badge>
                     </TableCell>
                   </TableRow>
@@ -164,8 +176,8 @@ export default function HomePage() {
         </Card>
         <Card className="lg:col-span-3">
           <CardHeader>
-            <CardTitle>Expense Breakdown</CardTitle>
-            <CardDescription>Expenses by category for the current month.</CardDescription>
+            <CardTitle>Top Products</CardTitle>
+            <CardDescription>Best-selling equipment this month.</CardDescription>
           </CardHeader>
           <CardContent>
              <div className="flex items-center justify-center h-full text-muted-foreground">

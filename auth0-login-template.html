@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <title>Sign In</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+  {%- auth0:head -%}
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #f5f7fa;
+    }
+
+    /* Golf theme styles - hidden by default */
+    .golf-header,
+    .golf-footer {
+      display: none;
+    }
+
+    body.golf-theme {
+      background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+    }
+
+    body.golf-theme .golf-header,
+    body.golf-theme .golf-footer {
+      display: block;
+    }
+
+    /* Header */
+    .golf-header {
+      background: white;
+      padding: 20px 40px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    }
+
+    .brand-container {
+      display: flex;
+      align-items: center;
+      gap: 30px;
+      flex-wrap: wrap;
+    }
+
+    .main-logo {
+      font-size: 24px;
+      font-weight: 700;
+      color: #2e7d32;
+      letter-spacing: -0.5px;
+    }
+
+    .sub-brands {
+      display: flex;
+      gap: 20px;
+      padding-left: 30px;
+      border-left: 2px solid #e0e0e0;
+      flex-wrap: wrap;
+    }
+
+    .sub-brand {
+      font-size: 14px;
+      font-weight: 600;
+      color: #616161;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Footer */
+    .golf-footer {
+      background: white;
+      padding: 24px 40px;
+      border-top: 1px solid #e0e0e0;
+      text-align: center;
+      margin-top: auto;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .footer-link {
+      color: #616161;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .footer-link:hover {
+      color: #2e7d32;
+    }
+
+    .footer-text {
+      color: #9e9e9e;
+      font-size: 12px;
+    }
+
+    /* Override Auth0 primary button color for golf theme */
+    body.golf-theme button[type="submit"],
+    body.golf-theme button[data-action-button-primary="true"] {
+      background-color: #2e7d32 !important;
+      border-color: #2e7d32 !important;
+    }
+
+    body.golf-theme button[type="submit"]:hover,
+    body.golf-theme button[data-action-button-primary="true"]:hover {
+      background-color: #1b5e20 !important;
+      border-color: #1b5e20 !important;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .golf-header {
+        padding: 16px 20px;
+      }
+
+      .brand-container {
+        flex-direction: column;
+        gap: 16px;
+        align-items: flex-start;
+      }
+
+      .sub-brands {
+        border-left: none;
+        border-top: 2px solid #e0e0e0;
+        padding-left: 0;
+        padding-top: 12px;
+      }
+
+      .footer-links {
+        flex-direction: column;
+        gap: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header (only visible for golf app) -->
+  <div class="golf-header">
+    <div class="brand-container">
+      <div class="main-logo">GolfClub Pro</div>
+      <div class="sub-brands">
+        <span class="sub-brand">Titleist</span>
+        <span class="sub-brand">FootJoy</span>
+        <span class="sub-brand">Scotty Cameron</span>
+        <span class="sub-brand">Vokey</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth0 Universal Login Widget (renders in default location) -->
+  {%- auth0:widget -%}
+
+  <!-- Footer (only visible for golf app) -->
+  <div class="golf-footer">
+    <div class="footer-links">
+      <a href="#" class="footer-link">Support</a>
+      <a href="#" class="footer-link">Privacy Policy</a>
+      <a href="#" class="footer-link">Terms of Service</a>
+      <a href="#" class="footer-link">Contact Us</a>
+    </div>
+    <div class="footer-text">
+      © 2025 GolfClub Pro. All rights reserved.
+    </div>
+  </div>
+
+  <script>
+    // Apply golf theme for specific client ID
+    // Replace with your actual Client ID
+    const GOLF_APP_CLIENT_ID = 'YOUR_CLIENT_ID_HERE';
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const clientId = urlParams.get('client_id');
+
+    if (clientId === GOLF_APP_CLIENT_ID) {
+      document.body.classList.add('golf-theme');
+      document.title = 'Sign In - GolfClub Pro';
+    }
+  </script>
+</body>
+</html>

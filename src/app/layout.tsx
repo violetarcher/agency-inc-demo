@@ -7,8 +7,8 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import './globals.css';
 
 export const metadata = {
-  title: 'Agency Inc Dashboard',
-  description: 'B2B SaaS Dashboard with Auth0 Organizations',
+  title: 'GolfClub Pro Dashboard',
+  description: 'Golf Equipment Distribution Portal - B2B Sales Platform',
 };
 
 export default function RootLayout({
@@ -23,7 +23,7 @@ export default function RootLayout({
           <AuthWrapper>
             <ThemeProvider
               attribute="class"
-              defaultTheme="dark"
+              defaultTheme="light"
               enableSystem
               disableTransitionOnChange
             >
