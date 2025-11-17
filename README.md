@@ -28,6 +28,7 @@ The application serves as a robust template for building multi-tenant, secure, a
 
 ### Authentication & Authorization
 - **Auth0** with Organizations for multi-tenancy
+- **Auth0 FGA (Fine-Grained Authorization)** for document permissions
 - **Role-Based Access Control (RBAC)** with custom permissions
 - **Session Management** with back-channel logout support
 - **Multi-Factor Authentication (MFA)** for step-up authentication
@@ -68,6 +69,15 @@ The application serves as a robust template for building multi-tenant, secure, a
 - **Loading States**: Skeleton loaders and optimistic UI
 - **Error Handling**: Comprehensive error boundaries
 
+### 📁 Document Management with Fine-Grained Authorization
+- **Hierarchical Folder Structure**: Nested folders with breadcrumb navigation
+- **Real-Time Permission Checks**: FGA-powered authorization on every document access
+- **Email-Based Sharing**: Share documents and folders with organization members
+- **Permission Inheritance**: Folders inherit viewer permissions to child documents
+- **Document Viewer**: Modal-based document viewing with permission enforcement
+- **Professional Error Handling**: Demo-ready permission denied modals
+- **URL-Based Navigation**: Bookmarkable folder paths with browser history support
+
 ### 🎨 UI/UX & Development
 - **Modern Design System**: Consistent component library
 - **Dark Mode**: System-aware theme switching
@@ -89,10 +99,22 @@ src/
 │   │   ├── organization/  # Member & role management
 │   │   │   └── members/   # CRUD operations with role assignment
 │   │   ├── request-access/ # Access request workflow
-│   │   └── reports/       # Report management with step-up MFA
+│   │   ├── reports/       # Report management with step-up MFA
+│   │   ├── documents/     # Document management with FGA
+│   │   │   └── [documentId]/
+│   │   │       ├── route.ts      # Document CRUD operations
+│   │   │       └── share/route.ts # Document sharing with FGA
+│   │   ├── folders/       # Folder management with FGA
+│   │   │   └── [folderId]/
+│   │   │       ├── route.ts      # Folder CRUD operations
+│   │   │       └── share/route.ts # Folder sharing with FGA
+│   │   └── users/         # User management
+│   │       └── lookup/route.ts   # Email-based user lookup
 │   ├── admin/             # Admin dashboard pages
 │   ├── analytics/         # Analytics dashboard with access requests
-│   └── reports/           # Reporting interface with step-up MFA
+│   ├── reports/           # Reporting interface with step-up MFA
+│   └── documents/         # Document management UI
+│       └── page.tsx       # Hierarchical folder/document interface
 ├── components/            # Reusable React components
 │   ├── ui/               # shadcn/ui components
 │   ├── admin/            # Admin-specific components
@@ -106,6 +128,9 @@ src/
 │   ├── validations.ts    # Zod validation schemas
 │   ├── session-revocation.ts # File-based session revocation
 │   ├── auth0-session-manager.ts # Auth0 session enforcement
+│   ├── fga-service.ts    # Auth0 FGA client and utilities
+│   ├── firebase-admin.ts # Firebase Admin SDK setup
+│   ├── auth0-mgmt-client.ts # Auth0 Management API client
 │   ├── api-client.ts     # Type-safe API client
 │   └── auth0-*.ts        # Auth0 integrations
 └── pages/                # Legacy Pages Router (Auth0 handlers)
@@ -432,6 +457,13 @@ AUTH0_MGMT_DOMAIN='your-auth0-domain.auth0.com'
 AUTH0_MGMT_CLIENT_ID='your-m2m-client-id'
 AUTH0_MGMT_CLIENT_SECRET='your-m2m-client-secret'
 
+# Auth0 FGA (Fine-Grained Authorization)
+FGA_STORE_ID='your-fga-store-id'
+FGA_CLIENT_ID='your-fga-client-id'
+FGA_CLIENT_SECRET='your-fga-client-secret'
+FGA_API_URL='https://api.us1.fga.dev'
+FGA_AUTHORIZATION_MODEL_ID='your-authorization-model-id'
+
 # Firebase (Base64 encoded service account JSON)
 FIREBASE_SERVICE_ACCOUNT_BASE64='your-base64-encoded-service-account'
 ```
@@ -549,6 +581,27 @@ npm run lint    # Run ESLint
 - `DELETE /api/reports/[id]` - Report deletion (requires step-up MFA)
 - `POST /api/request-access` - Role elevation requests
 
+### Document Management (FGA-Protected)
+- `GET /api/documents` - List accessible documents
+- `POST /api/documents` - Create document (sets FGA owner)
+- `GET /api/documents/[id]` - Get document (requires `can_read`)
+- `PUT /api/documents/[id]` - Update document (requires `owner`)
+- `DELETE /api/documents/[id]` - Delete document (requires `owner`)
+- `POST /api/documents/[id]/share` - Share document (requires `can_share`)
+- `DELETE /api/documents/[id]/share` - Revoke access (requires `can_share`)
+
+### Folder Management (FGA-Protected)
+- `GET /api/folders` - List accessible folders
+- `POST /api/folders` - Create folder (sets FGA owner)
+- `GET /api/folders/[id]` - Get folder (requires `viewer`)
+- `PUT /api/folders/[id]` - Update folder (requires `owner`)
+- `DELETE /api/folders/[id]` - Delete folder (requires `owner`)
+- `POST /api/folders/[id]/share` - Share folder (requires `owner`)
+- `DELETE /api/folders/[id]/share` - Revoke folder access (requires `owner`)
+
+### User Lookup
+- `GET /api/users/lookup?email=...` - Find organization members by email
+
 ## 🎯 Demo Scenarios
 
 ### 1. Admin User Management
@@ -578,6 +631,17 @@ npm run lint    # Run ESLint
 3. Admin can view/terminate sessions
 4. Real-time session validation
 
+### 5. Document Management with FGA
+1. Login as any user
+2. Navigate to Documents page
+3. Create folders and documents
+4. Share document/folder with colleague via email
+5. Login as second user
+6. View shared documents with FGA permissions enforced
+7. Try to access unshared document
+8. See professional "Access Denied" modal
+9. Test permission inheritance through folder hierarchy
+
 ## 🎯 Core Concepts Demonstrated
 
 1. **Multi-Tenant Architecture** - Organization-based user isolation
@@ -589,6 +653,319 @@ npm run lint    # Run ESLint
 7. **Type Safety** - End-to-end TypeScript with Zod validation
 8. **Error Handling** - Graceful degradation and user feedback
 9. **Security Best Practices** - Server-side validation, authorization
+10. **Fine-Grained Authorization** - ReBAC with Auth0 FGA for document permissions
+
+## 📁 Document Management with Auth0 FGA
+
+### Overview
+
+The application implements a comprehensive document management system using **Auth0 Fine-Grained Authorization (FGA)** to provide relationship-based access control (ReBAC). This enables granular permissions for documents and folders, with support for sharing, permission inheritance, and real-time authorization checks.
+
+### Authorization Model
+
+We use the **Google Drive model** from Auth0's official FGA sample stores, which provides a proven authorization schema for hierarchical document systems.
+
+**Model Schema:**
+
+```
+schema 1.1
+
+type user
+
+type group
+  relations
+    define member: [user]
+
+type folder
+  relations
+    define can_create_file: owner
+    define owner: [user]
+    define parent: [folder]
+    define viewer: [user, user:*, group#member] or owner or viewer from parent
+
+type doc
+  relations
+    define can_change_owner: owner
+    define can_read: viewer or owner or viewer from parent
+    define can_share: owner or owner from parent
+    define can_write: owner or owner from parent
+    define owner: [user]
+    define parent: [folder]
+    define viewer: [user, user:*, group#member]
+```
+
+**Key Features of This Model:**
+
+- **Permission Inheritance**: Documents inherit viewer permissions from their parent folder
+- **Hierarchical Folders**: Folders can contain other folders with cascading permissions
+- **Multiple Permission Types**:
+  - `owner`: Full control over document/folder
+  - `viewer`: Read-only access
+  - `can_read`, `can_write`, `can_share`: Granular operation permissions
+- **Group Support**: Share with groups of users
+- **Wildcard Sharing**: Support for `user:*` to share with all users
+
+### Auth0 FGA Setup
+
+#### 1. Create FGA Store
+
+1. **Sign up for Auth0 FGA**
+   - Go to [Auth0 FGA Dashboard](https://dashboard.fga.dev/)
+   - Create a new store: `agency-inc-documents`
+
+2. **Deploy the Authorization Model**
+   - Navigate to your store
+   - Go to **Authorization Models**
+   - Click **Create Model**
+   - Paste the Google Drive schema (shown above)
+   - Save and deploy the model
+
+3. **Get Store Credentials**
+   - Store ID: Found in store settings
+   - Client ID: Generated in store API settings
+   - Client Secret: Generated in store API settings
+   - API URL: Provided in store settings (typically `https://api.us1.fga.dev`)
+
+#### 2. Configure Environment Variables
+
+Add to your `.env.local`:
+
+```env
+# Auth0 FGA Configuration
+FGA_STORE_ID='your-store-id'
+FGA_CLIENT_ID='your-fga-client-id'
+FGA_CLIENT_SECRET='your-fga-client-secret'
+FGA_API_URL='https://api.us1.fga.dev'
+FGA_AUTHORIZATION_MODEL_ID='your-model-id'
+```
+
+#### 3. Initialize FGA Client
+
+The application includes a pre-configured FGA service (`/src/lib/fga-service.ts`) that provides:
+
+- **checkPermission()** - Verify if a user has a specific permission
+- **writeTuple()** - Grant permissions by writing relationship tuples
+- **deleteTuple()** - Revoke permissions
+- **readTuples()** - List all permissions for an object
+- **formatUserId()** - Format Auth0 user IDs for FGA
+- **formatDocId()** / **formatFolderId()** - Format object IDs
+
+**Example Usage:**
+
+```typescript
+import { checkPermission, writeTuple, formatUserId, formatDocId } from '@/lib/fga-service';
+
+// Check if user can read a document
+const canRead = await checkPermission(
+  formatUserId('auth0|123456'),
+  'can_read',
+  formatDocId('doc-123')
+);
+
+// Grant viewer permission on a document
+await writeTuple({
+  user: formatUserId('auth0|123456'),
+  relation: 'viewer',
+  object: formatDocId('doc-123'),
+});
+```
+
+### Permission System
+
+#### Document Permissions
+
+1. **Owner**:
+   - Can read, write, share, and delete the document
+   - Can change ownership
+   - Set when document is created
+
+2. **Viewer**:
+   - Can read the document
+   - Cannot modify or share
+   - Can be granted explicitly or inherited from parent folder
+
+3. **Parent Folder Inheritance**:
+   - Documents automatically inherit viewer permissions from their parent folder
+   - If a user is a viewer of a folder, they can read all documents in that folder
+
+#### Folder Permissions
+
+1. **Owner**:
+   - Can read, modify, delete the folder
+   - Can create documents/subfolders within it
+   - Can share the folder with others
+
+2. **Viewer**:
+   - Can view the folder and all its contents
+   - Can read documents within the folder (via inheritance)
+   - Cannot create, modify, or delete
+
+#### Real-Time Permission Checks
+
+Every document and folder access is protected by FGA permission checks:
+
+- **Document Viewing**: Checks `can_read` permission before displaying content
+- **Document Editing**: Checks `can_write` permission before allowing edits
+- **Folder Navigation**: Checks `viewer` permission before showing contents
+- **Sharing**: Checks `owner` or `can_share` permission before allowing share operations
+- **Deletion**: Checks `owner` permission before allowing deletion
+
+### API Endpoints
+
+#### Documents
+
+- **GET /api/documents** - List all documents user has access to
+  - Permission: Authenticated user (filters results by FGA permissions)
+
+- **POST /api/documents** - Create new document
+  - Permission: Authenticated user in organization
+  - Automatically sets creator as owner in FGA
+
+- **GET /api/documents/[id]** - Get document with permission check
+  - Permission: `can_read` on document
+  - Returns user's permissions (`canRead`, `canWrite`, `canShare`)
+
+- **PUT /api/documents/[id]** - Update document
+  - Permission: `owner` on document
+
+- **DELETE /api/documents/[id]** - Delete document
+  - Permission: `owner` on document
+  - Cleans up all FGA tuples
+
+- **POST /api/documents/[id]/share** - Share document
+  - Permission: `can_share` on document
+  - Creates FGA tuple for target user
+
+- **DELETE /api/documents/[id]/share** - Revoke access
+  - Permission: `can_share` on document
+  - Deletes FGA tuple
+
+#### Folders
+
+- **GET /api/folders** - List all folders user has access to
+  - Permission: Authenticated user (filters results by FGA permissions)
+
+- **POST /api/folders** - Create new folder
+  - Permission: Authenticated user in organization
+  - Automatically sets creator as owner in FGA
+
+- **GET /api/folders/[id]** - Get folder with permission check
+  - Permission: `viewer` on folder
+  - Returns user's permissions (`canView`, `canCreateFile`)
+
+- **PUT /api/folders/[id]** - Update folder
+  - Permission: `owner` on folder
+
+- **DELETE /api/folders/[id]** - Delete folder
+  - Permission: `owner` on folder
+  - Cleans up all FGA tuples
+
+- **POST /api/folders/[id]/share** - Share folder
+  - Permission: `owner` on folder
+  - Creates FGA tuple for target user
+  - Supports `viewer` and `owner` roles
+
+- **DELETE /api/folders/[id]/share** - Revoke folder access
+  - Permission: `owner` on folder
+  - Deletes FGA tuple
+
+#### User Lookup
+
+- **GET /api/users/lookup?email=user@example.com** - Look up user by email
+  - Permission: Authenticated user in organization
+  - Returns user details for sharing purposes
+  - Only finds users within the same organization
+
+### Demo Scenarios
+
+#### 1. Document Creation and Ownership
+
+1. Login as any user
+2. Navigate to Documents page
+3. Create a new document
+4. User is automatically set as owner in FGA
+5. Document appears in user's document list
+
+#### 2. Sharing a Document
+
+1. Login as document owner
+2. Navigate to Documents
+3. Click "Share" on a document
+4. Enter organization member's email
+5. Select permission level (viewer/owner)
+6. FGA tuple is created
+7. Target user can now access the document
+
+#### 3. Permission Inheritance via Folders
+
+1. Login as folder owner
+2. Create a folder
+3. Create a document inside the folder
+4. Share the folder with another user as "viewer"
+5. Target user can now:
+   - View the folder
+   - View all documents in the folder (via inheritance)
+   - Cannot edit documents (viewer permission)
+
+#### 4. Permission Denied Flow
+
+1. Login as User A
+2. User B creates a private document (not shared)
+3. User A somehow obtains document ID
+4. User A tries to access `/documents?doc=xxx`
+5. FGA permission check fails
+6. Professional "Access Denied" modal appears
+7. Shows helpful suggestions and Auth0 FGA branding
+
+#### 5. Hierarchical Folders
+
+1. Create nested folder structure: `Projects/2024/Q1`
+2. Create documents in Q1 folder
+3. Share "Projects" folder with team member as viewer
+4. Team member can navigate entire hierarchy
+5. Team member can view all nested documents
+6. Permission inheritance flows through folder structure
+
+### Technical Implementation
+
+**Permission Check Flow:**
+
+```
+User Request → API Endpoint → Auth0 Session Check → FGA Permission Check → Operation/Denial
+```
+
+**Document Creation Flow:**
+
+```
+1. User creates document via UI
+2. POST /api/documents with metadata
+3. Save document to Firestore
+4. Write FGA tuple: user:auth0|xxx owner doc:doc-123
+5. Return success to UI
+```
+
+**Sharing Flow:**
+
+```
+1. Owner clicks "Share" on document
+2. Enter email → Lookup user via /api/users/lookup
+3. POST /api/documents/[id]/share with userId and permission
+4. Check if requester has can_share permission
+5. Write FGA tuple: user:auth0|yyy viewer doc:doc-123
+6. Target user can now access document
+```
+
+**Permission Inheritance Example:**
+
+```
+Tuple 1: user:alice owner folder:projects
+Tuple 2: user:bob viewer folder:projects
+Tuple 3: doc:report-1 parent folder:projects
+
+Query: Can bob read doc:report-1?
+FGA evaluates: viewer from parent
+Result: YES (bob is viewer of parent folder)
+```
 
 ## 🚨 Troubleshooting
 
@@ -614,6 +991,38 @@ npm run lint    # Run ESLint
    - Check M2M app has organization scopes
    - Ensure API permissions are assigned to roles
 
+5. **FGA Permission Checks Failing**
+   - Verify FGA environment variables are set correctly
+   - Check that FGA Store ID and Authorization Model ID are valid
+   - Ensure FGA client credentials have proper access
+   - Verify user IDs are formatted correctly (e.g., `user:auth0|123456`)
+   - Check that object IDs are formatted correctly (e.g., `doc:doc-123`, `folder:folder-456`)
+   - Use FGA Dashboard to inspect existing tuples and verify relationships
+
+6. **Documents Not Appearing in List**
+   - Confirm user has FGA permissions (owner or viewer)
+   - Check that documents belong to user's organization (Firestore filter)
+   - Verify FGA tuples were written when document was created
+   - Check browser console for API errors
+
+7. **Sharing Not Working**
+   - Ensure user being shared with exists in the organization
+   - Verify `/api/users/lookup` endpoint is returning correct user ID
+   - Check that requester has `can_share` or `owner` permission
+   - Inspect FGA tuples to confirm relationship was written
+
+8. **Permission Inheritance Not Working**
+   - Verify `parent` relationship tuple exists (e.g., `doc:doc-123 parent folder:folder-456`)
+   - Check that authorization model is deployed correctly
+   - Confirm folder viewer tuples are in place
+   - Use FGA API's `list-objects` to debug which objects user has access to
+
+9. **User Lookup 404 Errors**
+   - Confirm user exists in Auth0 organization
+   - Check that user's email matches exactly (case-insensitive)
+   - Verify M2M app has `read:organization_members` scope
+   - Ensure organization ID is correct in user session
+
 ### Debugging
 
 Enable detailed logging by adding to `.env.local`:
@@ -626,6 +1035,9 @@ AUTH0_DEBUG=1
 
 - [Auth0 Organizations Documentation](https://auth0.com/docs/manage-users/organizations)
 - [Auth0 Actions Documentation](https://auth0.com/docs/customize/actions)
+- [Auth0 FGA Documentation](https://auth0.com/docs/fine-grained-authorization)
+- [Auth0 FGA Sample Stores - Google Drive Model](https://github.com/openfga/sample-stores/tree/main/stores/gdrive)
+- [OpenFGA Documentation](https://openfga.dev/docs)
 - [Next.js App Router Documentation](https://nextjs.org/docs/app)
 - [Zod Validation Documentation](https://zod.dev/)
 
