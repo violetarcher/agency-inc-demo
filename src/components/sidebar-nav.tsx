@@ -4,13 +4,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { 
-  Home, 
-  FileText, 
+import {
+  Home,
+  FileText,
   Settings,
   Monitor,
   Search,
-  BarChart3
+  BarChart3,
+  FolderOpen
 } from 'lucide-react';
 
 interface SidebarNavProps {
@@ -59,9 +60,9 @@ export function SidebarNav({ roles }: SidebarNavProps) {
       </Button>
       
       {/* Analytics - Show for everyone, access control handled on page */}
-      <Button 
-        asChild 
-        variant={pathname === '/analytics' ? 'secondary' : 'ghost'} 
+      <Button
+        asChild
+        variant={pathname === '/analytics' ? 'secondary' : 'ghost'}
         className="w-full justify-start"
       >
         <Link href="/analytics">
@@ -69,7 +70,19 @@ export function SidebarNav({ roles }: SidebarNavProps) {
           Analytics
         </Link>
       </Button>
-      
+
+      {/* Documents - Show for everyone, access control via FGA */}
+      <Button
+        asChild
+        variant={pathname === '/documents' ? 'secondary' : 'ghost'}
+        className="w-full justify-start"
+      >
+        <Link href="/documents">
+          <FolderOpen className="mr-2 h-4 w-4" />
+          Documents
+        </Link>
+      </Button>
+
       {/* Admin-only navigation items */}
       {isAdmin && (
         <>
