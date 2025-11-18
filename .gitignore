@@ -14,6 +14,9 @@
 # Do not commit your Firebase service account key
 service-account.json
 
+# Session revocation data
+revoked-sessions.json
+
 # Log files
 npm-debug.log*
 yarn-debug.log*
