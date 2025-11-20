@@ -25,6 +25,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { TupleInfoModal, TupleInfo } from '@/components/ui/tuple-info-modal';
 
 interface Document {
   id: string;
@@ -74,6 +75,8 @@ export default function DocumentsPage() {
   const [checkingPermission, setCheckingPermission] = useState(false);
   const [permissionDeniedDialogOpen, setPermissionDeniedDialogOpen] = useState(false);
   const [deniedDocumentName, setDeniedDocumentName] = useState('');
+  const [tupleModalOpen, setTupleModalOpen] = useState(false);
+  const [currentTupleInfo, setCurrentTupleInfo] = useState<TupleInfo | null>(null);
 
   // Get current folder ID from URL
   const currentFolderId = searchParams.get('folder');
@@ -169,9 +172,28 @@ export default function DocumentsPage() {
   const currentFolders = folders.filter(
     (f) => (f.parentId || null) === currentFolderId
   );
-  const currentDocuments = documents.filter(
-    (d) => (d.parentId || null) === currentFolderId
-  );
+
+  // Filter documents for current folder
+  // Special handling: if viewing root (currentFolderId === null), also show documents
+  // whose parent folder the user doesn't have access to (orphaned documents)
+  const currentDocuments = documents.filter((d) => {
+    const docParentId = d.parentId || null;
+
+    // If document's parent matches current folder, show it
+    if (docParentId === currentFolderId) {
+      return true;
+    }
+
+    // If viewing root level and document has a parent folder
+    if (currentFolderId === null && docParentId !== null) {
+      // Check if user has access to the parent folder
+      const parentFolder = folders.find((f) => f.id === docParentId);
+      // If parent folder doesn't exist in user's accessible folders, show as orphaned document
+      return !parentFolder;
+    }
+
+    return false;
+  });
 
   const createDocument = async () => {
     if (!newDocName.trim()) {
@@ -197,6 +219,17 @@ export default function DocumentsPage() {
         setNewDocName('');
         setNewDocContent('');
         toast.success('Document created successfully');
+
+        // Show tuple modal if tuple info is available
+        if (data.tupleInfo && Array.isArray(data.tupleInfo)) {
+          // Show each tuple one at a time
+          for (const tuple of data.tupleInfo) {
+            setCurrentTupleInfo(tuple);
+            setTupleModalOpen(true);
+            // Wait a bit before showing the next one (user needs to close the first one)
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
       } else {
         const error = await response.json();
         toast.error(error.error || 'Failed to create document');
@@ -229,6 +262,17 @@ export default function DocumentsPage() {
         setCreateFolderDialogOpen(false);
         setNewFolderName('');
         toast.success('Folder created successfully');
+
+        // Show tuple modal if tuple info is available
+        if (data.tupleInfo && Array.isArray(data.tupleInfo)) {
+          // Show each tuple one at a time
+          for (const tuple of data.tupleInfo) {
+            setCurrentTupleInfo(tuple);
+            setTupleModalOpen(true);
+            // Wait a bit before showing the next one (user needs to close the first one)
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
       } else {
         const error = await response.json();
         toast.error(error.error || 'Failed to create folder');
@@ -250,8 +294,20 @@ export default function DocumentsPage() {
       });
 
       if (response.ok) {
+        const data = await response.json();
         setDocuments(documents.filter(doc => doc.id !== docId));
         toast.success('Document deleted successfully');
+
+        // Show tuple modal if tuple info is available
+        if (data.tupleInfo && Array.isArray(data.tupleInfo)) {
+          // Show each tuple one at a time
+          for (const tuple of data.tupleInfo) {
+            setCurrentTupleInfo(tuple);
+            setTupleModalOpen(true);
+            // Wait a bit before showing the next one (user needs to close the first one)
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
       } else {
         const error = await response.json();
         toast.error(error.error || 'Failed to delete document');
@@ -273,8 +329,20 @@ export default function DocumentsPage() {
       });
 
       if (response.ok) {
+        const data = await response.json();
         setFolders(folders.filter(folder => folder.id !== folderId));
         toast.success('Folder deleted successfully');
+
+        // Show tuple modal if tuple info is available
+        if (data.tupleInfo && Array.isArray(data.tupleInfo)) {
+          // Show each tuple one at a time
+          for (const tuple of data.tupleInfo) {
+            setCurrentTupleInfo(tuple);
+            setTupleModalOpen(true);
+            // Wait a bit before showing the next one (user needs to close the first one)
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
       } else {
         const error = await response.json();
         toast.error(error.error || 'Failed to delete folder');
@@ -420,12 +488,19 @@ export default function DocumentsPage() {
       });
 
       if (response.ok) {
+        const data = await response.json();
         setShareDialogOpen(false);
         const itemType = shareType === 'document' ? 'Document' : 'Folder';
         const targetName = shareTarget === 'user'
           ? shareUserName || shareEmail
           : groups.find(g => g.id === selectedGroupId)?.name || 'group';
         toast.success(`${itemType} shared with ${targetName}`);
+
+        // Show tuple modal if tuple info is available
+        if (data.tupleInfo) {
+          setCurrentTupleInfo(data.tupleInfo);
+          setTupleModalOpen(true);
+        }
       } else {
         const error = await response.json();
         toast.error(error.error || `Failed to share ${shareType}`);
@@ -1002,6 +1077,16 @@ export default function DocumentsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Tuple Info Modal */}
+      <TupleInfoModal
+        isOpen={tupleModalOpen}
+        tupleInfo={currentTupleInfo}
+        onClose={() => {
+          setTupleModalOpen(false);
+          setCurrentTupleInfo(null);
+        }}
+      />
     </div>
   );
 }

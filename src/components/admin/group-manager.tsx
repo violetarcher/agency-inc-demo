@@ -23,6 +23,7 @@ import {
 import { toast } from 'sonner';
 import { Group, GroupMember } from '@/types/groups';
 import { Textarea } from '@/components/ui/textarea';
+import { TupleInfoModal, TupleInfo } from '@/components/ui/tuple-info-modal';
 
 export function GroupManager() {
   const [groups, setGroups] = useState<Group[]>([]);
@@ -35,6 +36,8 @@ export function GroupManager() {
   const [newGroupDescription, setNewGroupDescription] = useState('');
   const [memberEmail, setMemberEmail] = useState('');
   const [lookingUpUser, setLookingUpUser] = useState(false);
+  const [tupleModalOpen, setTupleModalOpen] = useState(false);
+  const [currentTupleInfo, setCurrentTupleInfo] = useState<TupleInfo | null>(null);
 
   useEffect(() => {
     fetchGroups();
@@ -123,12 +126,24 @@ export function GroupManager() {
       });
 
       if (response.ok) {
+        const data = await response.json();
         setGroups(groups.filter((g) => g.id !== groupId));
         if (selectedGroup?.id === groupId) {
           setSelectedGroup(null);
           setGroupMembers([]);
         }
         toast.success('Group deleted successfully');
+
+        // Show tuple modal if tuple info is available
+        if (data.tupleInfo && Array.isArray(data.tupleInfo)) {
+          // Show each tuple one at a time
+          for (const tuple of data.tupleInfo) {
+            setCurrentTupleInfo(tuple);
+            setTupleModalOpen(true);
+            // Wait a bit before showing the next one (user needs to close the first one)
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
       } else {
         const data = await response.json();
         toast.error(data.error || 'Failed to delete group');
@@ -175,10 +190,17 @@ export function GroupManager() {
       });
 
       if (addResponse.ok) {
+        const data = await addResponse.json();
         await fetchGroupMembers(selectedGroup.id);
         setMemberEmail('');
         setAddMemberDialogOpen(false);
         toast.success('Member added to group');
+
+        // Show tuple modal if tuple info is available
+        if (data.tupleInfo) {
+          setCurrentTupleInfo(data.tupleInfo);
+          setTupleModalOpen(true);
+        }
       } else {
         const data = await addResponse.json();
         toast.error(data.error || 'Failed to add member');
@@ -206,8 +228,15 @@ export function GroupManager() {
       });
 
       if (response.ok) {
+        const data = await response.json();
         setGroupMembers(groupMembers.filter((m) => m.userId !== userId));
         toast.success('Member removed from group');
+
+        // Show tuple modal if tuple info is available
+        if (data.tupleInfo) {
+          setCurrentTupleInfo(data.tupleInfo);
+          setTupleModalOpen(true);
+        }
       } else {
         const data = await response.json();
         toast.error(data.error || 'Failed to remove member');
@@ -443,6 +472,16 @@ export function GroupManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Tuple Info Modal */}
+      <TupleInfoModal
+        isOpen={tupleModalOpen}
+        tupleInfo={currentTupleInfo}
+        onClose={() => {
+          setTupleModalOpen(false);
+          setCurrentTupleInfo(null);
+        }}
+      />
     </>
   );
 }

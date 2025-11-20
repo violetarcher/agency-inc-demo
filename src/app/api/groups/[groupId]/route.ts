@@ -210,11 +210,18 @@ export const DELETE = withApiAuthRequired(async function DELETE(
     // Delete all tuples related to this group from FGA
     const fgaGroupId = formatGroupId(groupId);
     const tuples = await readTuples(fgaGroupId);
+    let deletedTuples = [];
     if (tuples.length > 0) {
-      await deleteTuples(tuples);
+      deletedTuples = await deleteTuples(tuples);
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      tupleInfo: deletedTuples.map(tuple => ({
+        operation: 'deleted' as const,
+        tuple,
+      })),
+    });
   } catch (error) {
     console.error('Error deleting group:', error);
     return NextResponse.json(

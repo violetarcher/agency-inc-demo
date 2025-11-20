@@ -242,13 +242,21 @@ export const DELETE = withApiAuthRequired(async function DELETE(
 
     // Delete all tuples related to this document from FGA
     const tuples = await readTuples(fgaDocId);
+    const deletedTuples = [];
     if (tuples.length > 0) {
       for (const tuple of tuples) {
-        await deleteTuple(tuple);
+        const deletedTuple = await deleteTuple(tuple);
+        deletedTuples.push(deletedTuple);
       }
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      tupleInfo: deletedTuples.map(tuple => ({
+        operation: 'deleted' as const,
+        tuple,
+      })),
+    });
   } catch (error) {
     console.error('Error deleting document:', error);
     return NextResponse.json(

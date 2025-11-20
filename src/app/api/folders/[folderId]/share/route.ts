@@ -67,7 +67,7 @@ export const POST = withApiAuthRequired(async function POST(
 
     // Write tuple to FGA
     const targetUserId = formatUserId(userId);
-    await writeTuple({
+    const tuple = await writeTuple({
       user: targetUserId,
       relation: folderRelation,
       object: fgaFolderId,
@@ -76,6 +76,10 @@ export const POST = withApiAuthRequired(async function POST(
     return NextResponse.json({
       success: true,
       message: `Folder shared with user ${userId} as ${folderRelation}`,
+      tupleInfo: {
+        operation: 'created',
+        tuple,
+      },
     });
   } catch (error) {
     console.error('Error sharing folder:', error);
@@ -136,7 +140,7 @@ export const DELETE = withApiAuthRequired(async function DELETE(
 
     // Delete tuple from FGA
     const targetUserId = formatUserId(userId);
-    await deleteTuple({
+    const tuple = await deleteTuple({
       user: targetUserId,
       relation: folderRelation,
       object: fgaFolderId,
@@ -145,6 +149,10 @@ export const DELETE = withApiAuthRequired(async function DELETE(
     return NextResponse.json({
       success: true,
       message: `Access revoked for user ${userId}`,
+      tupleInfo: {
+        operation: 'deleted',
+        tuple,
+      },
     });
   } catch (error) {
     console.error('Error revoking folder access:', error);

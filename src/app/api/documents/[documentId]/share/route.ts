@@ -63,7 +63,7 @@ export const POST = withApiAuthRequired(async function POST(
 
     // Write tuple to FGA
     const targetUserId = formatUserId(userId);
-    await writeTuple({
+    const tuple = await writeTuple({
       user: targetUserId,
       relation: permission,
       object: fgaDocId,
@@ -72,6 +72,10 @@ export const POST = withApiAuthRequired(async function POST(
     return NextResponse.json({
       success: true,
       message: `Document shared with user ${userId} as ${permission}`,
+      tupleInfo: {
+        operation: 'created',
+        tuple,
+      },
     });
   } catch (error) {
     console.error('Error sharing document:', error);
@@ -129,7 +133,7 @@ export const DELETE = withApiAuthRequired(async function DELETE(
 
     // Delete tuple from FGA
     const targetUserId = formatUserId(userId);
-    await deleteTuple({
+    const tuple = await deleteTuple({
       user: targetUserId,
       relation: permission,
       object: fgaDocId,
@@ -138,6 +142,10 @@ export const DELETE = withApiAuthRequired(async function DELETE(
     return NextResponse.json({
       success: true,
       message: `Access revoked for user ${userId}`,
+      tupleInfo: {
+        operation: 'deleted',
+        tuple,
+      },
     });
   } catch (error) {
     console.error('Error revoking document access:', error);

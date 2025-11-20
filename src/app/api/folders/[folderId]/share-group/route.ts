@@ -101,11 +101,15 @@ export const POST = withApiAuthRequired(async function POST(
     }
 
     // Assign group to folder in FGA
-    await assignGroupToFolder(groupId, folderId, permission);
+    const tuple = await assignGroupToFolder(groupId, folderId, permission);
 
     return NextResponse.json({
       success: true,
       message: `Folder shared with group ${groupData.name} as ${permission}`,
+      tupleInfo: {
+        operation: 'created',
+        tuple,
+      },
     });
   } catch (error) {
     console.error('Error sharing folder with group:', error);
@@ -181,11 +185,15 @@ export const DELETE = withApiAuthRequired(async function DELETE(
     const { groupId, permission } = validation.data;
 
     // Remove group's access to folder in FGA
-    await removeGroupFromFolder(groupId, folderId, permission);
+    const tuple = await removeGroupFromFolder(groupId, folderId, permission);
 
     return NextResponse.json({
       success: true,
       message: `Access revoked for group`,
+      tupleInfo: {
+        operation: 'deleted',
+        tuple,
+      },
     });
   } catch (error) {
     console.error('Error revoking folder access from group:', error);

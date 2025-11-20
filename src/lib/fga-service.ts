@@ -48,13 +48,14 @@ export async function checkPermission(
 /**
  * Write a relationship tuple to FGA
  * @param tuple - The relationship tuple to write
- * @returns Promise<void>
+ * @returns Promise<FGATuple> - The tuple that was written
  */
-export async function writeTuple(tuple: FGATuple): Promise<void> {
+export async function writeTuple(tuple: FGATuple): Promise<FGATuple> {
   try {
     await fgaClient.write({
       writes: [tuple],
     });
+    return tuple;
   } catch (error) {
     console.error('FGA write tuple error:', error);
     throw new Error('Failed to write tuple');
@@ -80,13 +81,14 @@ export async function writeTuples(tuples: FGATuple[]): Promise<void> {
 /**
  * Delete a relationship tuple from FGA
  * @param tuple - The relationship tuple to delete
- * @returns Promise<void>
+ * @returns Promise<FGATuple> - The tuple that was deleted
  */
-export async function deleteTuple(tuple: FGATuple): Promise<void> {
+export async function deleteTuple(tuple: FGATuple): Promise<FGATuple> {
   try {
     await fgaClient.write({
       deletes: [tuple],
     });
+    return tuple;
   } catch (error) {
     console.error('FGA delete tuple error:', error);
     throw new Error('Failed to delete tuple');
@@ -96,13 +98,14 @@ export async function deleteTuple(tuple: FGATuple): Promise<void> {
 /**
  * Delete multiple relationship tuples from FGA
  * @param tuples - Array of relationship tuples to delete
- * @returns Promise<void>
+ * @returns Promise<FGATuple[]> - The tuples that were deleted
  */
-export async function deleteTuples(tuples: FGATuple[]): Promise<void> {
+export async function deleteTuples(tuples: FGATuple[]): Promise<FGATuple[]> {
   try {
     await fgaClient.write({
       deletes: tuples,
     });
+    return tuples;
   } catch (error) {
     console.error('FGA delete tuples error:', error);
     throw new Error('Failed to delete tuples');
@@ -207,10 +210,10 @@ export function formatGroupMember(groupId: string): string {
  * Add a user to a group by writing a member tuple
  * @param userId - Auth0 user ID
  * @param groupId - Group ID
- * @returns Promise<void>
+ * @returns Promise<FGATuple> - The tuple that was written
  */
-export async function addUserToGroup(userId: string, groupId: string): Promise<void> {
-  await writeTuple({
+export async function addUserToGroup(userId: string, groupId: string): Promise<FGATuple> {
+  return await writeTuple({
     user: formatUserId(userId),
     relation: 'member',
     object: formatGroupId(groupId),
@@ -221,10 +224,10 @@ export async function addUserToGroup(userId: string, groupId: string): Promise<v
  * Remove a user from a group by deleting the member tuple
  * @param userId - Auth0 user ID
  * @param groupId - Group ID
- * @returns Promise<void>
+ * @returns Promise<FGATuple> - The tuple that was deleted
  */
-export async function removeUserFromGroup(userId: string, groupId: string): Promise<void> {
-  await deleteTuple({
+export async function removeUserFromGroup(userId: string, groupId: string): Promise<FGATuple> {
+  return await deleteTuple({
     user: formatUserId(userId),
     relation: 'member',
     object: formatGroupId(groupId),
@@ -236,14 +239,14 @@ export async function removeUserFromGroup(userId: string, groupId: string): Prom
  * @param groupId - Group ID
  * @param folderId - Folder ID
  * @param permission - Permission level ('viewer' or 'owner')
- * @returns Promise<void>
+ * @returns Promise<FGATuple> - The tuple that was written
  */
 export async function assignGroupToFolder(
   groupId: string,
   folderId: string,
   permission: 'viewer' | 'owner' = 'viewer'
-): Promise<void> {
-  await writeTuple({
+): Promise<FGATuple> {
+  return await writeTuple({
     user: formatGroupMember(groupId),
     relation: permission,
     object: formatFolderId(folderId),
@@ -255,14 +258,14 @@ export async function assignGroupToFolder(
  * @param groupId - Group ID
  * @param folderId - Folder ID
  * @param permission - Permission level to revoke
- * @returns Promise<void>
+ * @returns Promise<FGATuple> - The tuple that was deleted
  */
 export async function removeGroupFromFolder(
   groupId: string,
   folderId: string,
   permission: 'viewer' | 'owner' = 'viewer'
-): Promise<void> {
-  await deleteTuple({
+): Promise<FGATuple> {
+  return await deleteTuple({
     user: formatGroupMember(groupId),
     relation: permission,
     object: formatFolderId(folderId),

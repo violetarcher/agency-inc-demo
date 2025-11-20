@@ -160,11 +160,15 @@ export const POST = withApiAuthRequired(async function POST(
     }
 
     // Add user to group in FGA
-    await addUserToGroup(userId, groupId);
+    const tuple = await addUserToGroup(userId, groupId);
 
     return NextResponse.json({
       success: true,
       message: `User ${userId} added to group`,
+      tupleInfo: {
+        operation: 'created',
+        tuple,
+      },
     });
   } catch (error) {
     console.error('Error adding group member:', error);
@@ -237,11 +241,15 @@ export const DELETE = withApiAuthRequired(async function DELETE(
     const { userId } = validation.data;
 
     // Remove user from group in FGA
-    await removeUserFromGroup(userId, groupId);
+    const tuple = await removeUserFromGroup(userId, groupId);
 
     return NextResponse.json({
       success: true,
       message: `User ${userId} removed from group`,
+      tupleInfo: {
+        operation: 'deleted',
+        tuple,
+      },
     });
   } catch (error) {
     console.error('Error removing group member:', error);

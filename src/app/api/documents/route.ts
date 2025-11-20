@@ -150,9 +150,13 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
       });
     }
 
-    await writeTuple(tuples[0]);
+    const createdTuples = [];
+    const tuple1 = await writeTuple(tuples[0]);
+    createdTuples.push(tuple1);
+
     if (tuples.length > 1) {
-      await writeTuple(tuples[1]);
+      const tuple2 = await writeTuple(tuples[1]);
+      createdTuples.push(tuple2);
     }
 
     // Fetch the created document
@@ -164,6 +168,10 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
           id: doc.id,
           ...doc.data(),
         },
+        tupleInfo: createdTuples.map(tuple => ({
+          operation: 'created' as const,
+          tuple,
+        })),
       },
       { status: 201 }
     );
