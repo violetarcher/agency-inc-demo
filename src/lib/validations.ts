@@ -88,6 +88,16 @@ export const createGroupSchema = z.object({
   description: z.string().max(500).optional(),
 });
 
+export const updateGroupSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100).optional(),
+  description: z.string().max(500).optional(),
+});
+
 export const addGroupMemberSchema = z.object({
   userId: z.string().min(1, 'User ID is required'),
+});
+
+export const shareFolderWithGroupSchema = z.object({
+  groupId: z.string().min(1, 'Group ID is required'),
+  permission: z.enum(['viewer', 'owner']),
 });

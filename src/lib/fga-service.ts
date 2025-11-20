@@ -192,3 +192,96 @@ export function formatFolderId(folderId: string): string {
 export function formatGroupId(groupId: string): string {
   return `group:${groupId}`;
 }
+
+/**
+ * Helper function to format a group member reference for FGA
+ * Used when assigning groups to resources (e.g., folders)
+ * @param groupId - Group ID
+ * @returns Formatted group member string (e.g., "group:123#member")
+ */
+export function formatGroupMember(groupId: string): string {
+  return `${formatGroupId(groupId)}#member`;
+}
+
+/**
+ * Add a user to a group by writing a member tuple
+ * @param userId - Auth0 user ID
+ * @param groupId - Group ID
+ * @returns Promise<void>
+ */
+export async function addUserToGroup(userId: string, groupId: string): Promise<void> {
+  await writeTuple({
+    user: formatUserId(userId),
+    relation: 'member',
+    object: formatGroupId(groupId),
+  });
+}
+
+/**
+ * Remove a user from a group by deleting the member tuple
+ * @param userId - Auth0 user ID
+ * @param groupId - Group ID
+ * @returns Promise<void>
+ */
+export async function removeUserFromGroup(userId: string, groupId: string): Promise<void> {
+  await deleteTuple({
+    user: formatUserId(userId),
+    relation: 'member',
+    object: formatGroupId(groupId),
+  });
+}
+
+/**
+ * Assign a group to a folder (grants group members viewer access)
+ * @param groupId - Group ID
+ * @param folderId - Folder ID
+ * @param permission - Permission level ('viewer' or 'owner')
+ * @returns Promise<void>
+ */
+export async function assignGroupToFolder(
+  groupId: string,
+  folderId: string,
+  permission: 'viewer' | 'owner' = 'viewer'
+): Promise<void> {
+  await writeTuple({
+    user: formatGroupMember(groupId),
+    relation: permission,
+    object: formatFolderId(folderId),
+  });
+}
+
+/**
+ * Remove a group's access to a folder
+ * @param groupId - Group ID
+ * @param folderId - Folder ID
+ * @param permission - Permission level to revoke
+ * @returns Promise<void>
+ */
+export async function removeGroupFromFolder(
+  groupId: string,
+  folderId: string,
+  permission: 'viewer' | 'owner' = 'viewer'
+): Promise<void> {
+  await deleteTuple({
+    user: formatGroupMember(groupId),
+    relation: permission,
+    object: formatFolderId(folderId),
+  });
+}
+
+/**
+ * Get all members of a group by reading member tuples
+ * @param groupId - Group ID
+ * @returns Promise<string[]> - Array of user IDs
+ */
+export async function getGroupMembers(groupId: string): Promise<string[]> {
+  try {
+    const tuples = await readTuples(formatGroupId(groupId));
+    return tuples
+      .filter((tuple) => tuple.relation === 'member')
+      .map((tuple) => tuple.user.replace('user:', ''));
+  } catch (error) {
+    console.error('Error getting group members:', error);
+    return [];
+  }
+}

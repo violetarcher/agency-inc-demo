@@ -56,6 +56,7 @@ export default function DocumentsPage() {
   const [createFolderDialogOpen, setCreateFolderDialogOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareType, setShareType] = useState<'document' | 'folder'>('document');
+  const [shareTarget, setShareTarget] = useState<'user' | 'group'>('user');
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [shareEmail, setShareEmail] = useState('');
@@ -63,6 +64,8 @@ export default function DocumentsPage() {
   const [shareUserName, setShareUserName] = useState('');
   const [sharePermission, setSharePermission] = useState<'viewer' | 'owner'>('viewer');
   const [lookingUpUser, setLookingUpUser] = useState(false);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   const [newDocName, setNewDocName] = useState('');
   const [newDocContent, setNewDocContent] = useState('');
   const [newFolderName, setNewFolderName] = useState('');
@@ -282,6 +285,18 @@ export default function DocumentsPage() {
     }
   };
 
+  const fetchGroups = async () => {
+    try {
+      const response = await fetch('/api/groups');
+      if (response.ok) {
+        const data = await response.json();
+        setGroups(data.groups);
+      }
+    } catch (error) {
+      console.error('Error fetching groups:', error);
+    }
+  };
+
   const openShareDialog = (itemId: string, type: 'document' | 'folder') => {
     setShareType(type);
     if (type === 'document') {
@@ -294,8 +309,15 @@ export default function DocumentsPage() {
     setShareEmail('');
     setShareUserId('');
     setShareUserName('');
+    setShareTarget('user');
+    setSelectedGroupId('');
     setSharePermission('viewer');
     setShareDialogOpen(true);
+
+    // Fetch groups if sharing a folder (groups can only be shared with folders)
+    if (type === 'folder') {
+      fetchGroups();
+    }
   };
 
   const lookupUser = async () => {
@@ -354,34 +376,56 @@ export default function DocumentsPage() {
   };
 
   const shareItem = async () => {
-    if (!shareUserId) {
-      toast.error('Please lookup the user first');
-      return;
-    }
-
     const itemId = shareType === 'document' ? selectedDocId : selectedFolderId;
     if (!itemId) {
       return;
     }
 
+    // Validation based on share target
+    if (shareTarget === 'user' && !shareUserId) {
+      toast.error('Please lookup the user first');
+      return;
+    }
+
+    if (shareTarget === 'group' && !selectedGroupId) {
+      toast.error('Please select a group');
+      return;
+    }
+
     try {
-      const endpoint = shareType === 'document'
-        ? `/api/documents/${itemId}/share`
-        : `/api/folders/${itemId}/share`;
+      let endpoint: string;
+      let body: any;
+
+      if (shareTarget === 'user') {
+        endpoint = shareType === 'document'
+          ? `/api/documents/${itemId}/share`
+          : `/api/folders/${itemId}/share`;
+        body = {
+          userId: shareUserId,
+          permission: sharePermission,
+        };
+      } else {
+        // Sharing with group (only folders support this)
+        endpoint = `/api/folders/${itemId}/share-group`;
+        body = {
+          groupId: selectedGroupId,
+          permission: sharePermission,
+        };
+      }
 
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: shareUserId,
-          permission: sharePermission,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (response.ok) {
         setShareDialogOpen(false);
         const itemType = shareType === 'document' ? 'Document' : 'Folder';
-        toast.success(`${itemType} shared with ${shareUserName || shareEmail}`);
+        const targetName = shareTarget === 'user'
+          ? shareUserName || shareEmail
+          : groups.find(g => g.id === selectedGroupId)?.name || 'group';
+        toast.success(`${itemType} shared with ${targetName}`);
       } else {
         const error = await response.json();
         toast.error(error.error || `Failed to share ${shareType}`);
@@ -619,38 +663,95 @@ export default function DocumentsPage() {
           <DialogHeader>
             <DialogTitle>Share {shareType === 'document' ? 'Document' : 'Folder'}</DialogTitle>
             <DialogDescription>
-              Share this {shareType} with another user in your organization by entering their email address.
+              Share this {shareType} with {shareType === 'folder' ? 'users or groups' : 'users'} in your organization.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="share-email">Email Address</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="share-email"
-                  type="email"
-                  placeholder="user@example.com"
-                  value={shareEmail}
-                  onChange={(e) => {
-                    setShareEmail(e.target.value);
-                    setShareUserId('');
-                    setShareUserName('');
-                  }}
-                />
-                <Button
-                  type="button"
-                  onClick={lookupUser}
-                  disabled={lookingUpUser || !shareEmail.trim()}
-                >
-                  {lookingUpUser ? 'Looking up...' : 'Find User'}
-                </Button>
+            {/* Share Target Toggle (only for folders) */}
+            {shareType === 'folder' && (
+              <div className="space-y-2">
+                <Label>Share With</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={shareTarget === 'user' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setShareTarget('user')}
+                    className="flex-1"
+                  >
+                    User
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={shareTarget === 'group' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setShareTarget('group')}
+                    className="flex-1"
+                  >
+                    Group
+                  </Button>
+                </div>
               </div>
-              {shareUserId && (
-                <p className="text-sm text-green-600">
-                  ✓ Found: {shareUserName}
-                </p>
-              )}
-            </div>
+            )}
+
+            {/* User Selection */}
+            {shareTarget === 'user' && (
+              <div className="space-y-2">
+                <Label htmlFor="share-email">Email Address</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="share-email"
+                    type="email"
+                    placeholder="user@example.com"
+                    value={shareEmail}
+                    onChange={(e) => {
+                      setShareEmail(e.target.value);
+                      setShareUserId('');
+                      setShareUserName('');
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    onClick={lookupUser}
+                    disabled={lookingUpUser || !shareEmail.trim()}
+                  >
+                    {lookingUpUser ? 'Looking up...' : 'Find User'}
+                  </Button>
+                </div>
+                {shareUserId && (
+                  <p className="text-sm text-green-600">
+                    ✓ Found: {shareUserName}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Group Selection */}
+            {shareTarget === 'group' && (
+              <div className="space-y-2">
+                <Label htmlFor="share-group">Select Group</Label>
+                <select
+                  id="share-group"
+                  value={selectedGroupId}
+                  onChange={(e) => setSelectedGroupId(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">Choose a group...</option>
+                  {groups.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+                {selectedGroupId && (
+                  <p className="text-sm text-muted-foreground">
+                    All members of this group will have access to the folder and its contents.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Permission Level */}
             <div className="space-y-2">
               <Label htmlFor="share-permission">Permission Level</Label>
               <select
@@ -668,7 +769,12 @@ export default function DocumentsPage() {
             <Button variant="outline" onClick={() => setShareDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={shareItem} disabled={!shareUserId}>
+            <Button
+              onClick={shareItem}
+              disabled={
+                shareTarget === 'user' ? !shareUserId : !selectedGroupId
+              }
+            >
               Share
             </Button>
           </DialogFooter>

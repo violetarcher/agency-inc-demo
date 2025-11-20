@@ -2,6 +2,7 @@
 import { getSession, withPageAuthRequired } from "@auth0/nextjs-auth0";
 import { managementClient } from "@/lib/auth0-mgmt-client";
 import { MemberManager } from "@/components/admin/member-manager";
+import { GroupManager } from "@/components/admin/group-manager";
 
 // Helper function to check for admin role
 const isAdmin = (session: any): boolean => {
@@ -50,9 +51,12 @@ async function AdminPage() {
         <div>
           <header className="mb-8">
             <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-            <p className="text-muted-foreground">Manage organization members and their roles.</p>
+            <p className="text-muted-foreground">Manage organization members, roles, and groups.</p>
           </header>
-          <MemberManager initialMembers={membersWithRoles} availableRoles={availableRoles} />
+          <div className="space-y-8">
+            <MemberManager initialMembers={membersWithRoles} availableRoles={availableRoles} />
+            <GroupManager />
+          </div>
         </div>
     );
 }
