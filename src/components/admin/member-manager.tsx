@@ -33,6 +33,13 @@ export function MemberManager({ initialMembers, availableRoles }: MemberManagerP
   const [assignedRoles, setAssignedRoles] = useState<string[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [selectedInviteRole, setSelectedInviteRole] = useState(''); // Role for new invites
+  const [showMetadataForm, setShowMetadataForm] = useState(false);
+  const [metadata, setMetadata] = useState({
+    portal_user: false,
+    read_only_access: false,
+    read_write_access: false,
+    system_configuration_privileges: false,
+  });
   const router = useRouter();
 
   const handleInvite = async () => {
@@ -40,12 +47,22 @@ export function MemberManager({ initialMembers, availableRoles }: MemberManagerP
       toast.error("Email is required.");
       return;
     }
+
+    // Build app_metadata from checkboxes if form is shown
+    const app_metadata = showMetadataForm ? {
+      ...(metadata.portal_user && { portal_user: true }),
+      ...(metadata.read_only_access && { read_only_access: true }),
+      ...(metadata.read_write_access && { read_write_access: true }),
+      ...(metadata.system_configuration_privileges && { system_configuration_privileges: true }),
+    } : undefined;
+
     const response = await fetch('/api/organization/members', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         email: inviteEmail,
-        ...(selectedInviteRole && { roles: [selectedInviteRole] })
+        ...(selectedInviteRole && { roles: [selectedInviteRole] }),
+        ...(app_metadata && Object.keys(app_metadata).length > 0 && { app_metadata }),
       }),
     });
 
@@ -54,6 +71,13 @@ export function MemberManager({ initialMembers, availableRoles }: MemberManagerP
       setIsInviteDialogOpen(false);
       setInviteEmail('');
       setSelectedInviteRole('');
+      setShowMetadataForm(false);
+      setMetadata({
+        portal_user: false,
+        read_only_access: false,
+        read_write_access: false,
+        system_configuration_privileges: false,
+      });
       router.refresh();
     } else {
       const error = await response.json();
@@ -155,7 +179,7 @@ export function MemberManager({ initialMembers, availableRoles }: MemberManagerP
       </div>
 
       <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Invite New Member</DialogTitle>
             <DialogDescription>
@@ -180,6 +204,75 @@ export function MemberManager({ initialMembers, availableRoles }: MemberManagerP
                 ))}
               </SelectContent>
             </Select>
+
+            {/* Toggle for metadata form */}
+            <div className="flex items-center space-x-2 pt-2">
+              <Checkbox
+                id="show-metadata"
+                checked={showMetadataForm}
+                onCheckedChange={(checked) => setShowMetadataForm(checked as boolean)}
+              />
+              <label htmlFor="show-metadata" className="text-sm font-medium leading-none cursor-pointer">
+                Add authorization metadata
+              </label>
+            </div>
+
+            {/* Metadata form - only shown when toggled */}
+            {showMetadataForm && (
+              <div className="space-y-3 p-4 border rounded-md bg-muted/50">
+                <p className="text-sm font-medium text-muted-foreground">Authorization Attributes</p>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="portal-user"
+                      checked={metadata.portal_user}
+                      onCheckedChange={(checked) =>
+                        setMetadata({ ...metadata, portal_user: checked as boolean })
+                      }
+                    />
+                    <label htmlFor="portal-user" className="text-sm leading-none cursor-pointer">
+                      Portal User
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="read-only"
+                      checked={metadata.read_only_access}
+                      onCheckedChange={(checked) =>
+                        setMetadata({ ...metadata, read_only_access: checked as boolean })
+                      }
+                    />
+                    <label htmlFor="read-only" className="text-sm leading-none cursor-pointer">
+                      Read-only access
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="read-write"
+                      checked={metadata.read_write_access}
+                      onCheckedChange={(checked) =>
+                        setMetadata({ ...metadata, read_write_access: checked as boolean })
+                      }
+                    />
+                    <label htmlFor="read-write" className="text-sm leading-none cursor-pointer">
+                      Read-write access
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="sys-config"
+                      checked={metadata.system_configuration_privileges}
+                      onCheckedChange={(checked) =>
+                        setMetadata({ ...metadata, system_configuration_privileges: checked as boolean })
+                      }
+                    />
+                    <label htmlFor="sys-config" className="text-sm leading-none cursor-pointer">
+                      System configuration privileges
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsInviteDialogOpen(false)}>Cancel</Button>

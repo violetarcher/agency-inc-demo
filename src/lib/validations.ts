@@ -16,6 +16,12 @@ export const updateMemberRolesSchema = z.object({
 export const inviteMemberSchema = z.object({
   email: z.string().email('Valid email is required'),
   roles: z.array(z.string()).optional(),
+  app_metadata: z.object({
+    portal_user: z.boolean().optional(),
+    read_only_access: z.boolean().optional(),
+    read_write_access: z.boolean().optional(),
+    system_configuration_privileges: z.boolean().optional(),
+  }).optional(),
 });
 
 // Session management schemas

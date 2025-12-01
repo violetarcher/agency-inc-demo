@@ -78,7 +78,7 @@ export default function HomePage() {
           <CardHeader className="text-center">
             <CardTitle className="flex items-center justify-center gap-2 text-2xl">
               <FileText className="h-6 w-6 text-blue-600" />
-              Agency Inc Dashboard
+              SaaS+ Dashboard
             </CardTitle>
             <CardDescription>
               Please log in to access your dashboard and manage your reports.
