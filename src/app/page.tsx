@@ -20,7 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Fuel, TrendingUp, DollarSign, Truck, LogIn, AlertTriangle, Package, Calendar } from "lucide-react"
 
@@ -231,53 +231,93 @@ function PropaneDashboard({ user }: { user: any }) {
             <CardTitle>Delivery Preferences</CardTitle>
             <CardDescription>Manage your automatic delivery settings.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="autoDelivery"
-                checked={preferences.autoDelivery}
-                onCheckedChange={(checked) => handlePreferenceChange('auto_delivery', checked as boolean)}
-                disabled={isSaving}
-              />
-              <Label htmlFor="autoDelivery" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                Enable automatic delivery
-              </Label>
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="autoDelivery" className="text-sm font-medium">
+                  Automatic Delivery
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Schedule deliveries automatically
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs font-medium ${preferences.autoDelivery ? 'text-green-600' : 'text-gray-400'}`}>
+                  {preferences.autoDelivery ? 'ON' : 'OFF'}
+                </span>
+                <Switch
+                  id="autoDelivery"
+                  checked={preferences.autoDelivery}
+                  onCheckedChange={(checked) => handlePreferenceChange('auto_delivery', checked)}
+                  disabled={isSaving}
+                />
+              </div>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="emailNotifications"
-                checked={preferences.emailNotifications}
-                onCheckedChange={(checked) => handlePreferenceChange('email_notifications', checked as boolean)}
-                disabled={isSaving}
-              />
-              <Label htmlFor="emailNotifications" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                Email notifications
-              </Label>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="emailNotifications" className="text-sm font-medium">
+                  Email Notifications
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Receive updates via email
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs font-medium ${preferences.emailNotifications ? 'text-green-600' : 'text-gray-400'}`}>
+                  {preferences.emailNotifications ? 'ON' : 'OFF'}
+                </span>
+                <Switch
+                  id="emailNotifications"
+                  checked={preferences.emailNotifications}
+                  onCheckedChange={(checked) => handlePreferenceChange('email_notifications', checked)}
+                  disabled={isSaving}
+                />
+              </div>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="smsAlerts"
-                checked={preferences.smsAlerts}
-                onCheckedChange={(checked) => handlePreferenceChange('sms_alerts', checked as boolean)}
-                disabled={isSaving}
-              />
-              <Label htmlFor="smsAlerts" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                SMS delivery alerts
-              </Label>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="smsAlerts" className="text-sm font-medium">
+                  SMS Alerts
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Get text message alerts
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs font-medium ${preferences.smsAlerts ? 'text-green-600' : 'text-gray-400'}`}>
+                  {preferences.smsAlerts ? 'ON' : 'OFF'}
+                </span>
+                <Switch
+                  id="smsAlerts"
+                  checked={preferences.smsAlerts}
+                  onCheckedChange={(checked) => handlePreferenceChange('sms_alerts', checked)}
+                  disabled={isSaving}
+                />
+              </div>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="lowTankAlerts"
-                checked={preferences.lowTankAlerts}
-                onCheckedChange={(checked) => handlePreferenceChange('low_tank_alerts', checked as boolean)}
-                disabled={isSaving}
-              />
-              <Label htmlFor="lowTankAlerts" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                Low tank level alerts
-              </Label>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="lowTankAlerts" className="text-sm font-medium">
+                  Low Tank Alerts
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Alert when tank is running low
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-xs font-medium ${preferences.lowTankAlerts ? 'text-green-600' : 'text-gray-400'}`}>
+                  {preferences.lowTankAlerts ? 'ON' : 'OFF'}
+                </span>
+                <Switch
+                  id="lowTankAlerts"
+                  checked={preferences.lowTankAlerts}
+                  onCheckedChange={(checked) => handlePreferenceChange('low_tank_alerts', checked)}
+                  disabled={isSaving}
+                />
+              </div>
             </div>
 
             {saveMessage && (
