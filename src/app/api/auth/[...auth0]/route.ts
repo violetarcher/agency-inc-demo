@@ -13,6 +13,7 @@ export const GET = handleAuth({
       const authorizationParams: any = {
         audience: process.env.AUTH0_AUDIENCE,
         scope: 'openid profile email offline_access read:reports create:reports edit:reports delete:reports read:analytics',
+        acr_values: 'urn:okta:loa:2fa:any'
       };
 
       const loginHint = url.searchParams.get('login_hint');
@@ -88,7 +89,23 @@ export const GET = handleAuth({
 
   callback: async (req: NextRequest, ctx: any) => {
     try {
-      return await handleCallback(req, ctx);
+      return await handleCallback(req, ctx, {
+        afterCallback: async (_req: NextRequest, session: any) => {
+          console.log('===== AUTH CALLBACK TRIGGERED =====');
+
+          // Decode ID token to see claims
+          if (session.idToken) {
+            const base64Payload = session.idToken.split('.')[1];
+            const payload = JSON.parse(Buffer.from(base64Payload, 'base64').toString());
+            console.log('ID Token Claims:', JSON.stringify(payload, null, 2));
+            console.log('AMR Claim:', payload.amr || 'NOT FOUND');
+          }
+
+          console.log('===================================');
+
+          return session;
+        }
+      });
     } catch (error: any) {
       console.error("Callback Handler Error:", error);
       return Response.json(
