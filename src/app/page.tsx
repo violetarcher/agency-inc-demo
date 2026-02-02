@@ -248,7 +248,7 @@ function PropaneDashboard({ user }: { user: any }) {
                 <Switch
                   id="autoDelivery"
                   checked={preferences.autoDelivery}
-                  onCheckedChange={(checked) => handlePreferenceChange('auto_delivery', checked)}
+                  onCheckedChange={(checked: boolean) => handlePreferenceChange('auto_delivery', checked)}
                   disabled={isSaving}
                 />
               </div>
@@ -270,7 +270,7 @@ function PropaneDashboard({ user }: { user: any }) {
                 <Switch
                   id="emailNotifications"
                   checked={preferences.emailNotifications}
-                  onCheckedChange={(checked) => handlePreferenceChange('email_notifications', checked)}
+                  onCheckedChange={(checked: boolean) => handlePreferenceChange('email_notifications', checked)}
                   disabled={isSaving}
                 />
               </div>
@@ -292,7 +292,7 @@ function PropaneDashboard({ user }: { user: any }) {
                 <Switch
                   id="smsAlerts"
                   checked={preferences.smsAlerts}
-                  onCheckedChange={(checked) => handlePreferenceChange('sms_alerts', checked)}
+                  onCheckedChange={(checked: boolean) => handlePreferenceChange('sms_alerts', checked)}
                   disabled={isSaving}
                 />
               </div>
@@ -314,7 +314,7 @@ function PropaneDashboard({ user }: { user: any }) {
                 <Switch
                   id="lowTankAlerts"
                   checked={preferences.lowTankAlerts}
-                  onCheckedChange={(checked) => handlePreferenceChange('low_tank_alerts', checked)}
+                  onCheckedChange={(checked: boolean) => handlePreferenceChange('low_tank_alerts', checked)}
                   disabled={isSaving}
                 />
               </div>
