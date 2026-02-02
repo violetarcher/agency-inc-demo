@@ -17,22 +17,27 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
+    console.log('📥 Received preference update:', body);
 
     // Get current user metadata
     const userDetails = await managementClient.users.get({ id: userId });
     const currentMetadata = userDetails.data.user_metadata || {};
+    console.log('📋 Current metadata:', currentMetadata);
 
     // Merge new preferences with existing metadata
     const updatedMetadata = {
       ...currentMetadata,
       ...body,
     };
+    console.log('✅ Updated metadata:', updatedMetadata);
 
     // Update user_metadata in Auth0
     await managementClient.users.update(
       { id: userId },
       { user_metadata: updatedMetadata }
     );
+
+    console.log('💾 Successfully saved to Auth0');
 
     return Response.json({
       success: true,

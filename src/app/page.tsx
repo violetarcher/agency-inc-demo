@@ -1,7 +1,7 @@
 'use client';
 
 import { useUser } from '@auth0/nextjs-auth0/client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -111,21 +111,50 @@ export default function HomePage() {
 function PropaneDashboard({ user }: { user: any }) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Get current delivery preferences from user metadata
-  const userMetadata = user?.['https://agency-inc-demo.com/user_metadata'] || user?.user_metadata || {};
   const [preferences, setPreferences] = useState({
-    autoDelivery: userMetadata.auto_delivery || false,
-    emailNotifications: userMetadata.email_notifications || false,
-    smsAlerts: userMetadata.sms_alerts || false,
-    lowTankAlerts: userMetadata.low_tank_alerts || false,
+    autoDelivery: false,
+    emailNotifications: false,
+    smsAlerts: false,
+    lowTankAlerts: false,
   });
 
+  // Fetch user metadata function
+  const fetchMetadata = async () => {
+    try {
+      const response = await fetch('/api/user/metadata');
+      if (response.ok) {
+        const data = await response.json();
+        const metadata = data.user_metadata || {};
+
+        console.log('Fetched metadata:', metadata);
+
+        setPreferences({
+          autoDelivery: metadata.auto_delivery === true,
+          emailNotifications: metadata.email_notifications === true,
+          smsAlerts: metadata.sms_alerts === true,
+          lowTankAlerts: metadata.low_tank_alerts === true,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch user metadata:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch user metadata on component mount
+  useEffect(() => {
+    fetchMetadata();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handlePreferenceChange = async (key: string, value: boolean) => {
-    const newPreferences = { ...preferences, [key]: value };
-    setPreferences(newPreferences);
     setIsSaving(true);
     setSaveMessage('');
+
+    console.log('Updating preference:', key, '=', value);
 
     try {
       // Update user_metadata via API
@@ -138,11 +167,19 @@ function PropaneDashboard({ user }: { user: any }) {
       });
 
       if (response.ok) {
+        const data = await response.json();
+        console.log('Update successful, new metadata:', data.metadata);
+
+        // Refetch metadata to ensure UI is in sync
+        await fetchMetadata();
         setSaveMessage('Preferences saved successfully!');
       } else {
+        const errorData = await response.json();
+        console.error('Update failed:', errorData);
         setSaveMessage('Failed to save preferences. Please try again.');
       }
     } catch (error) {
+      console.error('Error updating preferences:', error);
       setSaveMessage('Error saving preferences. Please try again.');
     } finally {
       setIsSaving(false);
@@ -232,6 +269,12 @@ function PropaneDashboard({ user }: { user: any }) {
             <CardDescription>Manage your automatic delivery settings.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : (
+              <>
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label htmlFor="autoDelivery" className="text-sm font-medium">
@@ -331,6 +374,8 @@ function PropaneDashboard({ user }: { user: any }) {
                 Your preferences are saved automatically when you make changes.
               </p>
             </div>
+            </>
+            )}
           </CardContent>
         </Card>
       </div>
