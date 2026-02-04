@@ -21,6 +21,12 @@ export const GET = handleAuth({
         authorizationParams.login_hint = loginHint;
       }
 
+      // Pass organization parameter for org switching
+      const organization = url.searchParams.get('organization');
+      if (organization && !hasInvitation) {
+        authorizationParams.organization = organization;
+      }
+
       // Pass access request parameters to Auth0 Action
       if (isAccessRequest) {
         const requestedRole = url.searchParams.get('requested_role');

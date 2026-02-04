@@ -1,6 +1,7 @@
 // src/components/sidebar.tsx - Clean production version
 import { getSession } from '@auth0/nextjs-auth0';
 import { SidebarNav } from './sidebar-nav';
+import { OrgSwitcher } from './org-switcher';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,7 @@ export async function Sidebar() {
   const session = await getSession();
   const user = session?.user;
   const roles = user?.['https://agency-inc-demo.com/roles'] || [];
-  
+
   const orgName = user?.['https://agency-inc-demo.com/org_name'] || '';
   const orgLogo = user?.['https://agency-inc-demo.com/org_logo'];
   const companyName = orgName ? `MyGasHub | ${orgName}` : 'MyGasHub';
@@ -29,8 +30,15 @@ export async function Sidebar() {
         <h2 className="text-xl font-bold">{companyName}</h2>
       </div>
 
+      {user && (
+        <>
+          <OrgSwitcher userEmail={user.email} />
+          <div className="mb-4" />
+        </>
+      )}
+
       <SidebarNav roles={roles} />
-      
+
       <div className="mt-auto">
         {user ? (
           <div className="flex items-center gap-3">
