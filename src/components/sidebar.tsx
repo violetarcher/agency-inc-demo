@@ -14,7 +14,7 @@ export async function Sidebar() {
 
   const orgName = user?.['https://agency-inc-demo.com/org_name'] || '';
   const orgLogo = user?.['https://agency-inc-demo.com/org_logo'];
-  const companyName = orgName ? `MyGasHub | ${orgName}` : 'MyGasHub';
+  const companyName = orgName ? `SaaS+ | ${orgName}` : 'SaaS+';
   const logoUrl = orgLogo || "https://auth0images.s3.us-east-2.amazonaws.com/Auth0+Official+Icons/auth0-identicons/icon-api.png";
 
   return (
