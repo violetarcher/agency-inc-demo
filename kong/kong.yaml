@@ -1,0 +1,120 @@
+# Kong Declarative Configuration for Agency Inc Dashboard
+# This configuration sets up Kong Gateway to protect specific API routes with Auth0 JWT validation
+
+_format_version: "3.0"
+
+# Services define the upstream APIs that Kong will proxy to
+services:
+  # Kong-Protected API Service
+  - name: agency-dashboard-kong-api
+    url: http://localhost:4020
+    # For production, use your ngrok or production URL:
+    # url: https://fresh-bedbug-prepared.ngrok-free.app
+
+    routes:
+      # Protected Analytics Route
+      - name: analytics-route
+        paths:
+          - /api/kong-protected/analytics
+        methods:
+          - GET
+          - POST
+        strip_path: false
+
+      # Protected Reports Route
+      - name: reports-route
+        paths:
+          - /api/kong-protected/reports
+        methods:
+          - GET
+          - POST
+        strip_path: false
+
+      # Protected Documents Route
+      - name: documents-route
+        paths:
+          - /api/kong-protected/documents
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        strip_path: false
+
+# Plugins provide additional functionality like authentication, rate limiting, etc.
+plugins:
+  # JWT Plugin - Validates Auth0 JWT tokens
+  - name: jwt
+    service: agency-dashboard-kong-api
+    config:
+      # Header where JWT token is expected
+      header_names:
+        - Authorization
+      # URI parameter names (optional)
+      uri_param_names:
+        - jwt
+      # Claims to verify
+      claims_to_verify:
+        - exp  # Expiration time
+      # Key claim name (where to find the issuer/key identifier)
+      key_claim_name: iss
+      # Secret is base64 encoded
+      secret_is_base64: false
+      # Run plugin on every request
+      run_on_preflight: true
+      # Maximum expiration time (1 year in seconds)
+      maximum_expiration: 31536000
+
+  # Rate Limiting - Prevent API abuse
+  - name: rate-limiting
+    service: agency-dashboard-kong-api
+    config:
+      minute: 100
+      hour: 1000
+      policy: local
+
+  # CORS - Allow browser requests from your frontend
+  - name: cors
+    service: agency-dashboard-kong-api
+    config:
+      origins:
+        - http://localhost:4020
+        - https://fresh-bedbug-prepared.ngrok-free.app
+      methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - PATCH
+        - OPTIONS
+      headers:
+        - Accept
+        - Authorization
+        - Content-Type
+      exposed_headers:
+        - X-Auth-Token
+      credentials: true
+      max_age: 3600
+
+  # Request Transformer - Add custom headers with user info
+  - name: request-transformer
+    service: agency-dashboard-kong-api
+    config:
+      add:
+        headers:
+          - X-Kong-Protected:true
+
+# JWT Consumers - Maps Auth0 issuers to Kong consumers
+consumers:
+  - username: auth0-users
+    custom_id: auth0
+    jwt_secrets:
+      - key: https://archfaktor.us.auth0.com/
+        algorithm: RS256
+        # You'll need to add your Auth0 public key here
+        # Get it from: https://archfaktor.us.auth0.com/.well-known/jwks.json
+        # Then convert it to PEM format
+        rsa_public_key: |
+          -----BEGIN PUBLIC KEY-----
+          REPLACE_WITH_YOUR_AUTH0_PUBLIC_KEY
+          -----END PUBLIC KEY-----

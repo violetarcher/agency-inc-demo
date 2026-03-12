@@ -11,7 +11,8 @@ import {
   Monitor,
   Search,
   BarChart3,
-  FolderOpen
+  FolderOpen,
+  Shield
 } from 'lucide-react';
 
 interface SidebarNavProps {
@@ -80,6 +81,18 @@ export function SidebarNav({ roles }: SidebarNavProps) {
         <Link href="/documents">
           <FolderOpen className="mr-2 h-4 w-4" />
           Documents
+        </Link>
+      </Button>
+
+      {/* API Gateway Demo - Kong integration showcase */}
+      <Button
+        asChild
+        variant={pathname === '/api-gateway' ? 'secondary' : 'ghost'}
+        className="w-full justify-start"
+      >
+        <Link href="/api-gateway">
+          <Shield className="mr-2 h-4 w-4" />
+          API Gateway
         </Link>
       </Button>
 

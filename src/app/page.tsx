@@ -115,10 +115,10 @@ function Dashboard({ user }: { user: any }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const [preferences, setPreferences] = useState({
-    autoDelivery: false,
+    autoApproveReports: false,
     emailNotifications: false,
     smsAlerts: false,
-    lowTankAlerts: false,
+    systemAlerts: false,
   });
 
   // Fetch user metadata function
@@ -132,10 +132,10 @@ function Dashboard({ user }: { user: any }) {
         console.log('Fetched metadata:', metadata);
 
         setPreferences({
-          autoDelivery: metadata.auto_delivery === true,
+          autoApproveReports: metadata.auto_approve_reports === true,
           emailNotifications: metadata.email_notifications === true,
           smsAlerts: metadata.sms_alerts === true,
-          lowTankAlerts: metadata.low_tank_alerts === true,
+          systemAlerts: metadata.system_alerts === true,
         });
       }
     } catch (error) {
@@ -266,7 +266,7 @@ function Dashboard({ user }: { user: any }) {
               <>
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label htmlFor="autoDelivery" className="text-sm font-medium">
+                <Label htmlFor="autoApproveReports" className="text-sm font-medium">
                   Auto-Approve Reports
                 </Label>
                 <p className="text-xs text-muted-foreground">
@@ -274,13 +274,13 @@ function Dashboard({ user }: { user: any }) {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <span className={`text-xs font-medium ${preferences.autoDelivery ? 'text-green-600' : 'text-gray-400'}`}>
-                  {preferences.autoDelivery ? 'ON' : 'OFF'}
+                <span className={`text-xs font-medium ${preferences.autoApproveReports ? 'text-green-600' : 'text-gray-400'}`}>
+                  {preferences.autoApproveReports ? 'ON' : 'OFF'}
                 </span>
                 <Switch
-                  id="autoDelivery"
-                  checked={preferences.autoDelivery}
-                  onCheckedChange={(checked: boolean) => handlePreferenceChange('auto_delivery', checked)}
+                  id="autoApproveReports"
+                  checked={preferences.autoApproveReports}
+                  onCheckedChange={(checked: boolean) => handlePreferenceChange('auto_approve_reports', checked)}
                   disabled={isSaving}
                 />
               </div>
@@ -332,7 +332,7 @@ function Dashboard({ user }: { user: any }) {
 
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label htmlFor="lowTankAlerts" className="text-sm font-medium">
+                <Label htmlFor="systemAlerts" className="text-sm font-medium">
                   Alert Preferences
                 </Label>
                 <p className="text-xs text-muted-foreground">
@@ -340,13 +340,13 @@ function Dashboard({ user }: { user: any }) {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <span className={`text-xs font-medium ${preferences.lowTankAlerts ? 'text-green-600' : 'text-gray-400'}`}>
-                  {preferences.lowTankAlerts ? 'ON' : 'OFF'}
+                <span className={`text-xs font-medium ${preferences.systemAlerts ? 'text-green-600' : 'text-gray-400'}`}>
+                  {preferences.systemAlerts ? 'ON' : 'OFF'}
                 </span>
                 <Switch
-                  id="lowTankAlerts"
-                  checked={preferences.lowTankAlerts}
-                  onCheckedChange={(checked: boolean) => handlePreferenceChange('low_tank_alerts', checked)}
+                  id="systemAlerts"
+                  checked={preferences.systemAlerts}
+                  onCheckedChange={(checked: boolean) => handlePreferenceChange('system_alerts', checked)}
                   disabled={isSaving}
                 />
               </div>

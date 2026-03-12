@@ -1,0 +1,145 @@
+# Kong Declarative Configuration with OpenID Connect (OIDC) Plugin
+# This is the RECOMMENDED approach for Auth0 integration (easier than manual JWT setup)
+
+_format_version: "3.0"
+
+# Services define the upstream APIs that Kong will proxy to
+services:
+  # Kong-Protected API Service
+  - name: agency-dashboard-kong-api
+    url: http://localhost:4020
+    # For production, use your ngrok or production URL:
+    # url: https://fresh-bedbug-prepared.ngrok-free.app
+
+    routes:
+      # Protected Analytics Route
+      - name: analytics-route
+        paths:
+          - /api/kong-protected/analytics
+        methods:
+          - GET
+          - POST
+        strip_path: false
+
+      # Protected Reports Route
+      - name: reports-route
+        paths:
+          - /api/kong-protected/reports
+        methods:
+          - GET
+          - POST
+        strip_path: false
+
+      # Protected Documents Route
+      - name: documents-route
+        paths:
+          - /api/kong-protected/documents
+        methods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+        strip_path: false
+
+# Plugins provide additional functionality
+plugins:
+  # OpenID Connect Plugin - Handles full Auth0 OIDC flow
+  # NOTE: This plugin is only available in Kong Enterprise/Konnect
+  - name: openid-connect
+    service: agency-dashboard-kong-api
+    config:
+      # Auth0 configuration
+      issuer: https://archfaktor.us.auth0.com/
+
+      # Auth0 Application credentials
+      client_id: U8QtmFYd45QbH1nFwiIzpf0do8xmpmlg
+      client_secret: O33opbuZzr6ZdD0ug7bTgwKRonYn_HnmERnMY2FueOsZKwVRqDrqaWWEMQKyidX6
+
+      # Authentication flow
+      # Use "bearer" for API endpoints (validates JWT from Authorization header)
+      auth_methods:
+        - bearer
+        - introspection
+
+      # Scopes to request
+      scopes:
+        - openid
+        - profile
+        - email
+
+      # Where to find user info in token
+      bearer_jwt_auth_enable: true
+
+      # Verify JWT signature and claims
+      verify_claims: true
+      verify_signature: true
+
+      # Cache settings for performance
+      cache_ttl: 3600
+
+      # Downstream headers - pass user info to your API
+      downstream_headers_claims:
+        - sub
+        - email
+        - name
+      downstream_headers_names:
+        - X-User-Id:sub
+        - X-User-Email:email
+        - X-User-Name:name
+
+      # Audience validation (your API identifier)
+      # Use audience_required (not audience_claim - that's the JWT field name)
+      audience_required:
+        - https://b2b-saas-api.example.com
+
+      # audience_claim defaults to "aud" (you don't need to set this)
+
+  # Rate Limiting - Prevent API abuse
+  - name: rate-limiting
+    service: agency-dashboard-kong-api
+    config:
+      minute: 100
+      hour: 1000
+      day: 10000
+      policy: local
+
+  # CORS - Allow browser requests from your frontend
+  - name: cors
+    service: agency-dashboard-kong-api
+    config:
+      origins:
+        - http://localhost:4020
+        - https://fresh-bedbug-prepared.ngrok-free.app
+      methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - PATCH
+        - OPTIONS
+      headers:
+        - Accept
+        - Authorization
+        - Content-Type
+        - X-Requested-With
+      exposed_headers:
+        - X-Auth-Token
+        - X-User-Id
+        - X-User-Email
+      credentials: true
+      max_age: 3600
+
+  # Logging - Request/Response logging for debugging
+  - name: file-log
+    service: agency-dashboard-kong-api
+    config:
+      path: /tmp/kong-requests.log
+
+  # Request Transformer - Add custom headers
+  - name: request-transformer
+    service: agency-dashboard-kong-api
+    config:
+      add:
+        headers:
+          - X-Kong-Protected:true
+          - X-Gateway-Version:1.0

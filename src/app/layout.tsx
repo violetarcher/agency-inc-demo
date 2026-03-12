@@ -7,7 +7,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import './globals.css';
 
 export const metadata = {
-  title: 'Agency Inc Dashboard',
+  title: 'SaaS+',
   description: 'B2B SaaS Dashboard with Auth0 Organizations',
 };
 
