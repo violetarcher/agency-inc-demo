@@ -23,15 +23,15 @@ import {
 import { MermaidDiagram } from "@/components/mermaid-diagram";
 
 const architectureDiagram = `
-graph TB
-    A[Client Browser] -->|1. Request Auth0 Token| B[Auth0]
-    B -->|2. Returns JWT| A
-    A -->|3. Send Request<br/>Authorization: Bearer JWT| C[Kong Gateway]
-    C -->|4. Validate JWT| B
-    B -->|5. Validation Success| C
-    C -->|6. Add User Headers<br/>X-User-Id, X-User-Email| D[Next.js API]
-    D -->|7. Process & Return Data| C
-    C -->|8. Return Response| A
+graph LR
+    A[Client<br/>Browser] -->|1. Get JWT| B[Auth0]
+    B -->|2. JWT Token| A
+    A -->|3. API Request<br/>+ JWT| C[Kong<br/>Gateway]
+    C -->|4. Validate<br/>JWT| B
+    B -->|5. Valid ✓| C
+    C -->|6. Request<br/>+ User Headers| D[Next.js<br/>API]
+    D -->|7. Response<br/>Data| C
+    C -->|8. Response| A
 
     style A fill:#3b82f6,stroke:#1e40af,color:#fff
     style B fill:#10b981,stroke:#059669,color:#fff
@@ -131,27 +131,28 @@ export default function ApiGatewayPage() {
       )}
 
       {/* Main Content: API Test and Architecture Diagram */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-[400px_1fr]">
         {/* Analytics Test */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Activity className="h-5 w-5 text-blue-600" />
+        <Card className="h-fit">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Activity className="h-4 w-4 text-blue-600" />
               Analytics API
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs">
               GET /api/kong-protected/analytics
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3">
             <Button
               onClick={testAnalytics}
               disabled={loading}
+              size="sm"
               className="w-full"
             >
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
                   Testing...
                 </>
               ) : (
@@ -160,13 +161,13 @@ export default function ApiGatewayPage() {
             </Button>
 
             {analyticsData && (
-              <div className="space-y-2 text-sm">
-                <Badge variant="default" className="gap-1">
+              <div className="space-y-2">
+                <Badge variant="default" className="gap-1 text-xs">
                   <CheckCircle className="h-3 w-3" />
                   Success
                 </Badge>
-                <div className="bg-gray-50 p-3 rounded text-xs">
-                  <pre className="whitespace-pre-wrap">
+                <div className="bg-gray-50 p-2 rounded text-xs max-h-[200px] overflow-y-auto border">
+                  <pre className="whitespace-pre-wrap text-[10px] leading-tight">
                     {JSON.stringify(analyticsData.data?.overview || {}, null, 2)}
                   </pre>
                 </div>
@@ -177,17 +178,17 @@ export default function ApiGatewayPage() {
 
         {/* Architecture Diagram */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Shield className="h-5 w-5 text-blue-600" />
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Shield className="h-4 w-4 text-blue-600" />
               Request Flow
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs">
               How Kong Gateway validates and forwards requests
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <MermaidDiagram chart={architectureDiagram} className="flex justify-center" />
+          <CardContent className="flex items-center justify-center py-8">
+            <MermaidDiagram chart={architectureDiagram} className="w-full" />
           </CardContent>
         </Card>
       </div>
