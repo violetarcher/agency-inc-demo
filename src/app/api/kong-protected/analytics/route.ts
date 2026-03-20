@@ -30,17 +30,16 @@ export async function OPTIONS(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     // Check if request came through Kong
-    // Note: Uncomment this after adding Request Transformer plugin to Kong
-    // const kongProtected = request.headers.get('X-Kong-Protected');
-    // if (!kongProtected) {
-    //   return NextResponse.json(
-    //     {
-    //       error: 'Unauthorized',
-    //       message: 'This endpoint must be accessed through Kong Gateway'
-    //     },
-    //     { status: 401 }
-    //   );
-    // }
+    const kongProtected = request.headers.get('X-Kong-Protected');
+    if (!kongProtected) {
+      return NextResponse.json(
+        {
+          error: 'Unauthorized',
+          message: 'This endpoint must be accessed through Kong Gateway'
+        },
+        { status: 401 }
+      );
+    }
 
     // Extract user information from Kong headers
     const userId = request.headers.get('X-User-Id');
@@ -110,17 +109,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Check if request came through Kong
-    // Note: Uncomment this after adding Request Transformer plugin to Kong
-    // const kongProtected = request.headers.get('X-Kong-Protected');
-    // if (!kongProtected) {
-    //   return NextResponse.json(
-    //     {
-    //       error: 'Unauthorized',
-    //       message: 'This endpoint must be accessed through Kong Gateway'
-    //     },
-    //     { status: 401 }
-    //   );
-    // }
+    const kongProtected = request.headers.get('X-Kong-Protected');
+    if (!kongProtected) {
+      return NextResponse.json(
+        {
+          error: 'Unauthorized',
+          message: 'This endpoint must be accessed through Kong Gateway'
+        },
+        { status: 401 }
+      );
+    }
 
     // Extract user information from Kong headers
     const userId = request.headers.get('X-User-Id');
