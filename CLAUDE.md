@@ -216,6 +216,108 @@ if (event.transaction.acr_values.includes('multi-factor')) {
 }
 ```
 
+### 7. Kong API Gateway Integration
+
+**Kong Konnect** (`kong-019c989905usehqbh.kongcloud.dev`) sits as an API gateway layer between the frontend and backend APIs, providing JWT validation, rate limiting, CORS handling, and request transformation.
+
+**Architecture Flow:**
+```
+Browser → Kong Gateway → Next.js API
+         ↑            ↓
+         Auth0 (JWT validation via JWKS)
+```
+
+**Key Components:**
+- `src/app/api-gateway/page.tsx` - Kong demo page with Mermaid architecture diagram
+- `src/app/api/kong-protected/*` - API routes protected by Kong Gateway
+- `src/app/api/auth/token/route.ts` - Endpoint to retrieve Auth0 access token from session
+- `src/components/mermaid-diagram.tsx` - Reusable Mermaid.js diagram component
+
+**Kong Plugins Configured:**
+1. **OpenID Connect** - Validates Auth0 JWT tokens using JWKS endpoint
+2. **CORS** - Handles cross-origin requests from frontend
+3. **Rate Limiting** - 100 req/min, 1000 req/hour per consumer
+4. **Request Transformer** - Adds `X-Kong-Protected: true` header
+5. **Pre-Function** - Lua script to handle OPTIONS preflight requests
+
+**Kong-Protected API Route Pattern:**
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function GET(request: NextRequest) {
+  try {
+    // Check if request came through Kong
+    const kongProtected = request.headers.get('X-Kong-Protected');
+    if (!kongProtected) {
+      return NextResponse.json(
+        { error: 'Unauthorized', message: 'This endpoint must be accessed through Kong Gateway' },
+        { status: 401 }
+      );
+    }
+
+    // Extract user info from Kong headers (if configured)
+    const userId = request.headers.get('X-User-Id');
+    const userEmail = request.headers.get('X-User-Email');
+
+    // Fallback: Decode JWT from Authorization header
+    const authHeader = request.headers.get('Authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const base64Payload = token.split('.')[1];
+      const payload = JSON.parse(Buffer.from(base64Payload, 'base64').toString('utf-8'));
+      // payload contains: { sub, email, org_id, ... }
+    }
+
+    // Business logic
+    return NextResponse.json({ success: true, data });
+  } catch (error) {
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+```
+
+**Request Flow Through Kong:**
+
+1. **Frontend retrieves token** - GET `/api/auth/token` extracts JWT from session (no Auth0 call)
+2. **Frontend calls Kong** - Request sent to Kong Gateway URL with `Authorization: Bearer <JWT>`
+3. **Kong validates JWT** - Uses cached Auth0 JWKS public keys to verify signature, audience, issuer, expiry
+4. **Kong adds headers** - `X-Kong-Protected: true`, `X-Gateway-Version: 1.0`
+5. **Kong forwards to Next.js** - Request proxied to upstream Next.js API
+6. **Next.js validates** - Checks for `X-Kong-Protected` header, decodes JWT if needed
+7. **Response returns** - Kong adds CORS headers and returns response to browser
+
+**Important Notes:**
+- Kong validates JWT **locally** using Auth0's public keys (cached from JWKS endpoint)
+- Auth0 is NOT called for every request - only to refresh public key cache
+- Direct API calls without Kong are blocked by `X-Kong-Protected` header check
+- VPN must be disabled for Kong Gateway testing (VPN can block Kong requests)
+
+**Frontend Pattern for Kong Requests:**
+
+```typescript
+const fetchWithAuth = async (endpoint: string) => {
+  // Get Auth0 access token from session
+  const tokenResponse = await fetch('/api/auth/token');
+  const { accessToken } = await tokenResponse.json();
+
+  // Call through Kong Gateway
+  const response = await fetch(`${KONG_GATEWAY_URL}${endpoint}`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  return response.json();
+};
+```
+
+**Kong Configuration Files:**
+- `kong/kong-oidc.yaml` - Declarative Kong configuration with OIDC plugin
+- `kong/KONG-SETUP.md` - Complete setup guide for Kong Konnect
+- `kong/KONG-TESTING.md` - Testing scenarios and troubleshooting
+
 ## Project Structure
 
 ```
@@ -225,19 +327,24 @@ src/
 │   │   ├── auth/              # Auth0 handlers, session management
 │   │   │   ├── [...auth0]/    # Main Auth0 handler with step-up MFA
 │   │   │   ├── backchannel-logout/  # Back-channel logout webhook
+│   │   │   ├── token/         # Access token retrieval from session
 │   │   │   └── session/       # Session validation/enforcement endpoints
+│   │   ├── kong-protected/    # Kong Gateway-protected endpoints
+│   │   │   └── analytics/     # Analytics API (requires X-Kong-Protected header)
 │   │   ├── organization/      # Member and role management
 │   │   ├── documents/         # Document CRUD (FGA-protected)
 │   │   ├── folders/           # Folder CRUD (FGA-protected)
 │   │   ├── groups/            # Group management
 │   │   └── user/              # User preferences/metadata
 │   ├── admin/                 # Admin dashboard pages
+│   ├── api-gateway/           # Kong Gateway demo page with Mermaid diagram
 │   ├── documents/             # Document management UI
 │   ├── analytics/             # Analytics with access request workflow
 │   └── reports/               # Reporting interface
 ├── components/
 │   ├── ui/                    # shadcn/ui components
 │   ├── admin/                 # Admin-specific components
+│   ├── mermaid-diagram.tsx    # Mermaid.js diagram renderer
 │   ├── session-validator.tsx # Real-time session monitoring
 │   └── session-enforcer.tsx  # Single session enforcement
 ├── lib/
@@ -249,10 +356,14 @@ src/
 │   ├── auth0-mgmt-client.ts   # Auth0 Management API client
 │   ├── firebase-admin.ts      # Firebase Admin SDK initialization
 │   └── utils.ts               # Shared utilities
-└── auth0-actions/             # Auth0 Actions for deployment
-    ├── mfa-challenge-second-login.js
-    ├── progressive-profiling-amerigas.js
-    └── README.md              # Deployment instructions
+├── auth0-actions/             # Auth0 Actions for deployment
+│   ├── mfa-challenge-second-login.js
+│   ├── progressive-profiling-amerigas.js
+│   └── README.md              # Deployment instructions
+└── kong/                      # Kong Gateway configuration
+    ├── kong-oidc.yaml         # Declarative Kong config (OIDC)
+    ├── KONG-SETUP.md          # Complete setup guide
+    └── KONG-TESTING.md        # Testing scenarios
 ```
 
 ## When Adding New Features
@@ -408,6 +519,13 @@ const preference = userMetadata.new_preference;
 2. Look at `validation.error.errors` for detailed issues
 3. Ensure all required fields are provided
 
+**Kong Gateway issues:**
+1. Check Network tab for `X-Kong-Protected` and `X-Gateway-Version` headers in response
+2. Verify VPN is disabled (VPN can block Kong requests)
+3. Check Kong Konnect dashboard for request logs and plugin execution
+4. Test direct API call to confirm `X-Kong-Protected` enforcement
+5. Verify CORS plugin origins include your frontend URL (no leading/trailing spaces)
+
 ## Environment Variables
 
 See `README.md` for complete list. Key variables:
@@ -434,6 +552,9 @@ FGA_API_URL=               # https://api.us1.fga.dev
 
 # Firebase
 FIREBASE_SERVICE_ACCOUNT_BASE64=  # Base64-encoded service account JSON
+
+# Kong Gateway
+NEXT_PUBLIC_KONG_GATEWAY_URL=     # https://your-gateway.kongcloud.dev
 ```
 
 ## Testing Locally
@@ -461,13 +582,85 @@ When working on demo branches, remember that branding changes are cosmetic - the
 - `src/lib/auth0-session-manager.ts` - Session management
 - `src/lib/session-revocation.ts` - Revocation tracking
 - `src/app/api/auth/[...auth0]/route.ts` - Auth0 handler with step-up MFA
+- `src/app/api/auth/token/route.ts` - Access token retrieval for Kong requests
+- `src/app/api/kong-protected/analytics/route.ts` - Kong-protected endpoint example
+- `src/app/api-gateway/page.tsx` - Kong Gateway demo page
+- `src/components/mermaid-diagram.tsx` - Mermaid diagram component
+- `kong/kong-oidc.yaml` - Kong declarative configuration
+- `kong/KONG-SETUP.md` - Kong setup guide
 - `revoked-sessions.json` - Session blacklist (project root)
 - `.env.local` - Environment configuration
+
+## MCP Server Integration
+
+**OpenFGA Modeling MCP Server** is configured for Claude Code to provide FGA modeling assistance.
+
+### Setup
+
+**Installation Location:**
+```
+/Users/violet.archer/Documents/FGA/openfga-modeling-mcp
+```
+
+**Claude Code Configuration:**
+File: `~/.claude/settings.json`
+
+```json
+{
+  "mcpServers": {
+    "openfga": {
+      "command": "node",
+      "args": ["/Users/violet.archer/Documents/FGA/openfga-modeling-mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+**Note:** Configuration is global - applies to all Claude Code sessions on this machine.
+
+### What It Provides
+
+The MCP server offers tools for:
+- **FGA DSL validation** - Check authorization model syntax
+- **Modeling assistance** - Suggest relations and object types
+- **Best practices** - OpenFGA modeling patterns
+- **Model explanation** - Understand authorization logic
+
+### Usage
+
+When working on FGA-related tasks, Claude Code will automatically have access to OpenFGA modeling tools. No credentials are needed for modeling assistance (only required if querying live FGA API).
+
+### Rebuilding
+
+If the MCP server is updated:
+```bash
+cd /Users/violet.archer/Documents/FGA/openfga-modeling-mcp
+npm install
+npm run build
+```
+
+Then restart Claude Code session.
+
+### Current FGA Model
+
+This project uses the following FGA object types:
+- `user:{auth0_id}` - Users
+- `group:{id}` - Groups (with `member` relation)
+- `folder:{id}` - Folders (with `parent` relation)
+- `doc:{id}` - Documents
+
+Key relations: `owner`, `viewer`, `can_read`, `can_write`, `can_share`
+
+See `src/lib/fga-service.ts` for helper functions that format IDs properly.
 
 ## Additional Resources
 
 - **README.md** - Complete setup instructions and Auth0 Actions
 - **auth0-actions/** - Auth0 Action code for deployment
+- **kong/** - Kong Gateway configuration and setup guides
 - [Auth0 Organizations Docs](https://auth0.com/docs/manage-users/organizations)
 - [Auth0 FGA Docs](https://auth0.com/docs/fine-grained-authorization)
 - [OpenFGA Docs](https://openfga.dev/docs)
+- [Kong Konnect Docs](https://developer.konghq.com)
+- [Kong OIDC Plugin](https://developer.konghq.com/plugins/openid-connect/)
+- [OpenFGA MCP Server](https://github.com/aaguiarz/openfga-modeling-mcp)
