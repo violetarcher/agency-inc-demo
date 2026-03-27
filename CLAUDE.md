@@ -593,53 +593,66 @@ When working on demo branches, remember that branding changes are cosmetic - the
 
 ## MCP Server Integration
 
-**OpenFGA Modeling MCP Server** is configured for Claude Code to provide FGA modeling assistance.
+**FGA Modeling MCP Server** is configured for Claude Code to provide expert FGA modeling assistance with both the MCP server and `/fga` skill.
 
 ### Setup
 
 **Installation Location:**
 ```
-/Users/violet.archer/Documents/FGA/openfga-modeling-mcp
+/Users/violet.archer/Documents/FGA/fga-mcp-skills-quickstart
 ```
 
 **Claude Code Configuration:**
-File: `~/.claude/settings.json`
+The MCP server is registered using Claude Code CLI:
 
-```json
-{
-  "mcpServers": {
-    "openfga": {
-      "command": "node",
-      "args": ["/Users/violet.archer/Documents/FGA/openfga-modeling-mcp/dist/index.js"]
-    }
-  }
-}
+```bash
+claude mcp add fga -- node /Users/violet.archer/Documents/FGA/fga-mcp-skills-quickstart/dist/index.js
 ```
 
-**Note:** Configuration is global - applies to all Claude Code sessions on this machine.
+**Note:** Configuration is project-specific (stored in `.claude.json`) and applies to this project.
 
 ### What It Provides
 
-The MCP server offers tools for:
+The MCP server offers:
+- **Automatic expert context** - Detects FGA queries and injects relevant guidance (31+ pattern triggers)
 - **FGA DSL validation** - Check authorization model syntax
 - **Modeling assistance** - Suggest relations and object types
-- **Best practices** - OpenFGA modeling patterns
+- **Best practices** - OpenFGA and Auth0 FGA patterns
 - **Model explanation** - Understand authorization logic
+- **1200+ lines of expert knowledge** - Covers OpenFGA, Auth0 FGA, and Zanzibar patterns
+
+### FGA Skill
+
+The `/fga` skill provides structured workflows:
+- **Model design** - Interactive authorization model creation
+- **DSL validation** - Syntax checking and security review
+- **Test generation** - Comprehensive `.fga.yaml` test files
+- **Security review** - Permission logic verification
+- **Performance optimization** - Efficient tuple strategies
+- **Migration planning** - Safe model evolution
 
 ### Usage
 
-When working on FGA-related tasks, Claude Code will automatically have access to OpenFGA modeling tools. No credentials are needed for modeling assistance (only required if querying live FGA API).
+**Automatic (MCP):** Just ask FGA questions and the server provides context automatically.
+
+**Manual (Skill):** Invoke explicit workflows:
+```
+/fga design an authorization model for [domain]
+/fga review my FGA model
+/fga write tests for ./model.fga
+/fga optimize my model for performance
+```
 
 ### Rebuilding
 
 If the MCP server is updated:
 ```bash
-cd /Users/violet.archer/Documents/FGA/openfga-modeling-mcp
+cd /Users/violet.archer/Documents/FGA/fga-mcp-skills-quickstart
 npm install
 npm run build
 ```
 
-Then restart Claude Code session.
+Then restart Claude Code session with `/exit` and `claude`.
 
 ### Current FGA Model
 
@@ -663,4 +676,5 @@ See `src/lib/fga-service.ts` for helper functions that format IDs properly.
 - [OpenFGA Docs](https://openfga.dev/docs)
 - [Kong Konnect Docs](https://developer.konghq.com)
 - [Kong OIDC Plugin](https://developer.konghq.com/plugins/openid-connect/)
-- [OpenFGA MCP Server](https://github.com/aaguiarz/openfga-modeling-mcp)
+- [FGA MCP Skills Quickstart](https://github.com/violetarcher/fga-mcp-skills-quickstart)
+- [Original OpenFGA MCP Server](https://github.com/aaguiarz/openfga-modeling-mcp)
