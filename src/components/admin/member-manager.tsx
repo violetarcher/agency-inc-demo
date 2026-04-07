@@ -81,7 +81,12 @@ export function MemberManager({ initialMembers, availableRoles }: MemberManagerP
       router.refresh();
     } else {
       const error = await response.json();
-      toast.error("Failed to send invitation", { description: error.message });
+      const errorMsg = error.error || error.message || 'Unknown error';
+      const errorDetails = error.details ? JSON.stringify(error.details) : '';
+      toast.error("Failed to send invitation", {
+        description: `${errorMsg}${errorDetails ? ` - ${errorDetails}` : ''}`
+      });
+      console.error('Invitation error:', error);
     }
   };
 

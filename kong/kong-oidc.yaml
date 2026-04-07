@@ -49,7 +49,7 @@ plugins:
     service: agency-dashboard-kong-api
     config:
       # Auth0 configuration
-      issuer: https://archfaktor.us.auth0.com/
+      issuer: https://login.authskye.org/
 
       # Auth0 Application credentials
       client_id: U8QtmFYd45QbH1nFwiIzpf0do8xmpmlg

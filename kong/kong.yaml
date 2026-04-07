@@ -109,10 +109,10 @@ consumers:
   - username: auth0-users
     custom_id: auth0
     jwt_secrets:
-      - key: https://archfaktor.us.auth0.com/
+      - key: https://login.authskye.org/
         algorithm: RS256
         # You'll need to add your Auth0 public key here
-        # Get it from: https://archfaktor.us.auth0.com/.well-known/jwks.json
+        # Get it from: https://login.authskye.org/.well-known/jwks.json
         # Then convert it to PEM format
         rsa_public_key: |
           -----BEGIN PUBLIC KEY-----

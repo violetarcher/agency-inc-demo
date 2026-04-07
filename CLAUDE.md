@@ -198,7 +198,64 @@ await db.collection('documents').add({
 - User's org_id comes from session: `user.org_id`
 - Organization metadata (name, logo) in custom claims: `user['https://agency-inc-demo.com/org_name']`
 
-### 6. Step-Up MFA
+### 6. Custom Domains & Multiple Custom Domains
+
+This application uses **Auth0 Custom Domains** to provide a branded authentication experience. The custom domain is configured to replace the canonical Auth0 domain in user-facing flows while maintaining the canonical domain for API operations.
+
+**Current Configuration:**
+- **Custom Domain**: `login.authskye.org` (used for Universal Login)
+- **Canonical Domain**: `archfaktor.us.auth0.com` (used for Management API)
+- **JWT Issuer**: Tokens are issued with `iss: "https://login.authskye.org/"`
+
+**Environment Variables:**
+```env
+AUTH0_ISSUER_BASE_URL='https://login.authskye.org'     # Custom domain for authorize calls
+AUTH0_MGMT_DOMAIN='archfaktor.us.auth0.com'            # Canonical domain for Management API
+```
+
+**Multiple Custom Domains Support:**
+
+When Auth0 has multiple custom domains configured, organization invitations require the `auth0-custom-domain` HTTP header to specify which domain to use in invitation emails.
+
+**Implementation Pattern:**
+```typescript
+import { ManagementClient } from 'auth0';
+
+// Create Management Client with custom domain header
+const customDomainClient = new ManagementClient({
+  domain: process.env.AUTH0_MGMT_DOMAIN!,
+  clientId: process.env.AUTH0_MGMT_CLIENT_ID!,
+  clientSecret: process.env.AUTH0_MGMT_CLIENT_SECRET!,
+  headers: {
+    'auth0-custom-domain': process.env.AUTH0_ISSUER_BASE_URL!.replace('https://', '')
+  }
+});
+
+// Create invitation with custom domain
+await customDomainClient.organizations.createInvitation(
+  { id: orgId },
+  invitationPayload
+);
+```
+
+**Key Points:**
+- The `auth0-custom-domain` header is **required** for organization invitations when multiple custom domains exist
+- Without this header, Auth0 returns a 409 Conflict error
+- The header value should be the domain only (no `https://`): `login.authskye.org`
+- Management API endpoints that support this header: email verification, invitations, user creation, password change tickets, MFA enrollment
+- Kong Gateway configuration uses the **canonical domain** for JWT validation (since JWT tokens may still use canonical issuer in some Auth0 configurations)
+
+**Verification:**
+Test that custom domain endpoints are accessible:
+```bash
+# OpenID configuration
+curl https://login.authskye.org/.well-known/openid-configuration
+
+# JWKS (public keys)
+curl https://login.authskye.org/.well-known/jwks.json
+```
+
+### 7. Step-Up MFA
 
 Sensitive operations trigger step-up authentication:
 
@@ -216,7 +273,7 @@ if (event.transaction.acr_values.includes('multi-factor')) {
 }
 ```
 
-### 7. Kong API Gateway Integration
+### 8. Kong API Gateway Integration
 
 **Kong Konnect** (`kong-019c989905usehqbh.kongcloud.dev`) sits as an API gateway layer between the frontend and backend APIs, providing JWT validation, rate limiting, CORS handling, and request transformation.
 
@@ -486,6 +543,8 @@ const preference = userMetadata.new_preference;
 - Wrap API routes with `withApiAuthRequired`
 - Return consistent error responses with proper status codes
 - Include `tupleInfo` in responses when modifying FGA state
+- Use `auth0-custom-domain` header when creating invitations with Management API
+- Keep `AUTH0_MGMT_DOMAIN` as the canonical domain, not the custom domain
 
 ### ❌ Never Do
 
@@ -495,6 +554,8 @@ const preference = userMetadata.new_preference;
 - Create resources without `organizationId`
 - Block login on session management failures (always try/catch)
 - Use template syntax like `{{fields.value}}` in JSON - build objects in code
+- Use custom domain for `AUTH0_MGMT_DOMAIN` - always use canonical domain
+- Forget `auth0-custom-domain` header when multiple custom domains exist (causes 409 errors)
 
 ### 🔧 Debugging
 
@@ -526,6 +587,14 @@ const preference = userMetadata.new_preference;
 4. Test direct API call to confirm `X-Kong-Protected` enforcement
 5. Verify CORS plugin origins include your frontend URL (no leading/trailing spaces)
 
+**Custom Domain & Invitation issues:**
+1. **409 Conflict on invitations**: Missing `auth0-custom-domain` header when multiple domains exist
+2. **Verify custom domain is active**: Check Auth0 Dashboard → Branding → Custom Domains for "Verified" status
+3. **Test JWKS endpoint**: `curl https://login.authskye.org/.well-known/jwks.json`
+4. **Check JWT issuer**: Decode token and verify `iss` claim matches `AUTH0_ISSUER_BASE_URL`
+5. **Verify Management API domain**: `AUTH0_MGMT_DOMAIN` should always be canonical domain, never custom domain
+6. **Check invitation logs**: Server logs show `🌐 Using custom domain:` when creating invitations
+
 ## Environment Variables
 
 See `README.md` for complete list. Key variables:
@@ -534,13 +603,13 @@ See `README.md` for complete list. Key variables:
 # Auth0 Core
 AUTH0_SECRET=              # openssl rand -hex 32
 AUTH0_BASE_URL=            # Your ngrok or production URL
-AUTH0_ISSUER_BASE_URL=     # https://tenant.auth0.com
+AUTH0_ISSUER_BASE_URL=     # https://login.authskye.org (custom domain)
 AUTH0_CLIENT_ID=           # Application client ID
 AUTH0_CLIENT_SECRET=       # Application client secret
 AUTH0_AUDIENCE=            # API identifier
 
 # Auth0 Management API (M2M)
-AUTH0_MGMT_DOMAIN=         # tenant.auth0.com
+AUTH0_MGMT_DOMAIN=         # archfaktor.us.auth0.com (canonical domain)
 AUTH0_MGMT_CLIENT_ID=      # M2M client ID
 AUTH0_MGMT_CLIENT_SECRET=  # M2M client secret
 
@@ -583,8 +652,10 @@ When working on demo branches, remember that branding changes are cosmetic - the
 - `src/lib/session-revocation.ts` - Revocation tracking
 - `src/app/api/auth/[...auth0]/route.ts` - Auth0 handler with step-up MFA
 - `src/app/api/auth/token/route.ts` - Access token retrieval for Kong requests
+- `src/app/api/organization/members/route.ts` - Organization invitations with custom domain header
 - `src/app/api/kong-protected/analytics/route.ts` - Kong-protected endpoint example
 - `src/app/api-gateway/page.tsx` - Kong Gateway demo page
+- `src/components/admin/member-manager.tsx` - Member invitation UI
 - `src/components/mermaid-diagram.tsx` - Mermaid diagram component
 - `kong/kong-oidc.yaml` - Kong declarative configuration
 - `kong/KONG-SETUP.md` - Kong setup guide

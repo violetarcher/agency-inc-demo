@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getSession, withApiAuthRequired } from '@auth0/nextjs-auth0';
 import { managementClient } from '@/lib/auth0-mgmt-client';
+import { ManagementClient } from 'auth0';
 import { inviteMemberSchema } from '@/lib/validations';
 import { z } from 'zod';
 
@@ -112,7 +113,23 @@ export async function POST(request: NextRequest) {
 
     console.log('📧 Invitation payload:', JSON.stringify(invitationPayload, null, 2));
 
-    const invitation = await managementClient.organizations.createInvitation(
+    // Extract custom domain from AUTH0_ISSUER_BASE_URL (remove https://)
+    const customDomain = process.env.AUTH0_ISSUER_BASE_URL!.replace('https://', '');
+    console.log('🌐 Using custom domain:', customDomain);
+
+    // Create a Management Client instance with the auth0-custom-domain header
+    // This is required for Multiple Custom Domains support
+    const customDomainClient = new ManagementClient({
+      domain: process.env.AUTH0_MGMT_DOMAIN!,
+      clientId: process.env.AUTH0_MGMT_CLIENT_ID!,
+      clientSecret: process.env.AUTH0_MGMT_CLIENT_SECRET!,
+      headers: {
+        'auth0-custom-domain': customDomain
+      }
+    });
+
+    // Create invitation using the client with custom domain header
+    const invitation = await customDomainClient.organizations.createInvitation(
       { id: orgId },
       invitationPayload
     );
@@ -124,9 +141,19 @@ export async function POST(request: NextRequest) {
       message: error.message,
       statusCode: error.statusCode,
       data: error.data,
+      originalError: error.originalError,
     });
+
+    // Extract detailed error message for custom domain conflicts
+    const errorMessage = error.message || 'Internal server error';
+    const errorDetails = error.data?.message || error.data || '';
+
     return Response.json(
-      { error: error.message || 'Internal server error', details: error.data },
+      {
+        error: errorMessage,
+        details: errorDetails,
+        statusCode: error.statusCode
+      },
       { status: error.statusCode || 500 }
     );
   }
