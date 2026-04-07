@@ -70,7 +70,7 @@ export function SessionValidator() {
   // Show session validator status
   if (user && !isLoading) {
     return (
-      <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-3 py-2 rounded shadow-lg text-sm z-50">
+      <div className="fixed top-4 right-4 bg-blue-600 text-white px-3 py-2 rounded shadow-lg text-sm z-50">
         🛡️ Session Validator Active
         <div className="text-xs opacity-75">Checking every 5s</div>
       </div>

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAccessToken } from '@auth0/nextjs-auth0';
+import { getAccessToken, getSession } from '@auth0/nextjs-auth0';
 
 /**
  * Access Token Endpoint
  *
- * This endpoint returns the Auth0 access token for the current user.
- * Used by the frontend to make authenticated requests to Kong Gateway.
+ * This endpoint returns the Auth0 access token and ID token for the current user.
+ * Used by the frontend to make authenticated requests to Kong Gateway and for profile display.
  */
 
 export async function GET(request: NextRequest) {
@@ -20,8 +20,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Get the session to retrieve the ID token
+    const session = await getSession();
+    const idToken = session?.idToken;
+
     return NextResponse.json({
       accessToken,
+      idToken: idToken || undefined,
       expiresIn: 3600 // Auth0 tokens typically expire in 1 hour
     });
 

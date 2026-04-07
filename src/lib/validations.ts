@@ -107,3 +107,38 @@ export const shareFolderWithGroupSchema = z.object({
   groupId: z.string().min(1, 'Group ID is required'),
   permission: z.enum(['viewer', 'owner']),
 });
+
+// MFA management schemas
+export const mfaMethodIdSchema = z.object({
+  methodId: z.string().min(1, 'Method ID is required'),
+});
+
+export const enrollMfaFactorSchema = z.object({
+  type: z.enum(['sms', 'phone', 'email', 'totp', 'webauthn-roaming', 'webauthn-platform'], {
+    errorMap: () => ({ message: 'Invalid MFA factor type' })
+  }),
+  phoneNumber: z.string().optional(),
+  email: z.string().email('Valid email is required').optional(),
+  name: z.string().max(100, 'Name must be less than 100 characters').optional(),
+}).refine(
+  (data) => {
+    // Phone number required for SMS/phone factors
+    if ((data.type === 'sms' || data.type === 'phone') && !data.phoneNumber) {
+      return false;
+    }
+    // Email required for email factors
+    if (data.type === 'email' && !data.email) {
+      return false;
+    }
+    return true;
+  },
+  {
+    message: 'Phone number required for SMS/phone factors, email required for email factors',
+    path: ['phoneNumber']
+  }
+);
+
+export const updateMfaMethodSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters').optional(),
+  preferred: z.boolean().optional(),
+});

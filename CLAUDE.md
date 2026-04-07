@@ -273,7 +273,242 @@ if (event.transaction.acr_values.includes('multi-factor')) {
 }
 ```
 
-### 8. Kong API Gateway Integration
+### 8. My Account API for MFA Management
+
+The application uses **Auth0 My Account API** for user self-service MFA management. This allows users to enroll, view, and remove their own authentication methods without admin intervention.
+
+**Documentation:** https://auth0.com/docs/manage-users/my-account-api
+
+**Status:** Limited Early Access (requires activation in Auth0 Dashboard)
+
+**Architecture:**
+```
+Frontend → Next.js API Routes → My Account API (https://{domain}/me/)
+                    ↓
+            Step-Up Auth Required
+```
+
+**Key Components:**
+- `src/lib/my-account-api.ts` - My Account API service layer
+- `src/lib/step-up-auth.ts` - Step-up authentication utilities
+- `src/app/api/mfa/methods/` - MFA management endpoints
+- `src/components/profile/mfa-enrollment.tsx` - MFA enrollment UI
+
+**Configuration Requirements:**
+
+1. **Activate My Account API** (in Auth0 Dashboard):
+   - Navigate to Applications → APIs
+   - Find "MyAccount API" banner
+   - Click "Activate"
+
+2. **Configure Scopes** (in application settings):
+   ```env
+   AUTH0_SCOPE='openid profile email offline_access read:me:authentication_methods create:me:authentication_methods update:me:authentication_methods delete:me:authentication_methods'
+   ```
+
+3. **Create Client Grant** (for application):
+   - Grant your application access to My Account API
+   - Include required scopes: `create:me:authentication_methods`, `read:me:authentication_methods`, `update:me:authentication_methods`, `delete:me:authentication_methods`
+
+**API Endpoints:**
+
+All MFA endpoints enforce step-up authentication for enrollment/removal operations:
+
+```typescript
+// List enrolled MFA methods
+GET /api/mfa/methods
+
+// Enroll new MFA factor (requires step-up)
+POST /api/mfa/methods
+{
+  type: 'sms' | 'phone' | 'email' | 'totp' | 'webauthn-roaming' | 'webauthn-platform',
+  phoneNumber?: string,  // Required for SMS/phone
+  email?: string,        // Required for email
+  name?: string          // Optional display name
+}
+
+// Remove specific MFA method (requires step-up)
+DELETE /api/mfa/methods/[methodId]
+
+// Reset all MFA (requires step-up)
+DELETE /api/mfa/methods
+
+// List available MFA factors
+GET /api/mfa/factors
+```
+
+**Step-Up Authentication Integration:**
+
+All sensitive MFA operations require step-up authentication:
+
+```typescript
+import { requireStepUpAuth, createStepUpResponse, StepUpRequiredError } from '@/lib/step-up-auth';
+
+export const POST = withApiAuthRequired(async function POST(request) {
+  try {
+    // Require step-up authentication
+    await requireStepUpAuth('/profile?tab=security');
+
+    // Proceed with enrollment
+    const method = await createAuthenticationMethod(data);
+    return NextResponse.json({ success: true, method });
+  } catch (error) {
+    if (error instanceof StepUpRequiredError) {
+      return createStepUpResponse('/profile?tab=security');
+    }
+    throw error;
+  }
+});
+```
+
+**Frontend Integration:**
+
+The MFA enrollment UI automatically handles step-up authentication:
+
+```typescript
+// When step-up is required, frontend receives:
+{
+  error: 'Step-up authentication required',
+  code: 'STEP_UP_REQUIRED',
+  requiresStepUp: true,
+  redirectUrl: '/api/auth/login?stepup=true&returnTo=/profile?tab=security'
+}
+
+// Frontend redirects user to complete MFA
+if (response.status === 403 && data.requiresStepUp) {
+  window.location.href = data.redirectUrl;
+}
+```
+
+**Supported MFA Factor Types:**
+- **SMS** - Text message verification codes
+- **Phone** - Voice call verification codes
+- **TOTP** - Time-based one-time passwords (Google Authenticator, Authy)
+- **WebAuthn (Roaming)** - Hardware security keys (YubiKey, etc.)
+- **WebAuthn (Platform)** - Platform authenticators (Face ID, Touch ID, Windows Hello)
+- **Email** - Email verification codes
+
+**Rate Limiting:**
+- 25 requests per second (tenant level)
+- Consider implementing client-side rate limiting for better UX
+
+**Important Notes:**
+- My Account API uses user access tokens, not M2M tokens
+- Access tokens must have My Account API audience: `https://{domain}/me/`
+- Client Credentials Flow is NOT supported
+- Step-up authentication is enforced for all enrollment/removal operations
+- Email verification section remains separate from MFA management (user preference)
+
+**Current Status (December 2024):**
+⚠️ **My Account API implementation complete but pending Auth0 feature flag activation**
+- ESD (Enterprise Support Desk) ticket opened with Auth0
+- Waiting for feature flags to enable My Account API scopes in tenant
+- Implementation code is production-ready but not yet functional
+- Old MFA system backed up and can be restored if needed
+
+**Rollback Information:**
+
+The MFA management system was completely overhauled to use My Account API. If you need to revert to the previous implementation:
+
+**Before State (Legacy MFA System):**
+- **File:** `src/components/profile/mfa-enrollment-old.tsx.backup` (backed up)
+- **Features:**
+  - Email verification section (separate)
+  - Phone verification section (separate)
+  - Individual MFA factor cards (SMS, TOTP Guardian, TOTP-OTP, WebAuthn, Reset MFA)
+  - Each factor had its own enrollment dialog with custom flows
+  - Used Guardian enrollment tickets and redirects to Guardian pages
+  - SMS enrollment via step-up challenge endpoint `/api/step-up-challenge`
+  - TOTP enrollment via `/api/mfa` POST endpoint
+  - MFA reset via `/api/mfa-reset` endpoint
+  - Phone verification via `/api/mfa-enrollment-complete` endpoint
+  - Relied on Management API authenticators endpoints
+  - Mixed enrollment patterns (some in-app, some Guardian redirects)
+
+**After State (My Account API System):**
+- **File:** `src/components/profile/mfa-enrollment.tsx` (current)
+- **Features:**
+  - Email verification section (preserved, unchanged)
+  - Consolidated "Enrolled Methods" list showing all active MFA factors
+  - "Available Authentication Methods" grid with 5 factor types
+  - Unified enrollment flow via `/api/mfa/methods` POST endpoint
+  - Step-up authentication enforced via `src/lib/step-up-auth.ts`
+  - All CRUD operations via My Account API service (`src/lib/my-account-api.ts`)
+  - In-dialog enrollment (no Guardian redirects)
+  - Consistent RESTful API endpoints
+  - Remove individual methods or reset all MFA
+  - Clean card-based UI with better UX
+
+**How to Revert to Legacy System:**
+
+If My Account API feature flags are not available or issues arise, revert with these steps:
+
+```bash
+# 1. Restore old MFA component
+mv src/components/profile/mfa-enrollment.tsx src/components/profile/mfa-enrollment-myaccount.tsx
+mv src/components/profile/mfa-enrollment-old.tsx.backup src/components/profile/mfa-enrollment.tsx
+
+# 2. Remove My Account API endpoints (optional, they won't be called)
+rm -rf src/app/api/mfa/
+
+# 3. Revert AUTH0_SCOPE in .env.local
+# Remove: read:me:authentication_methods create:me:authentication_methods update:me:authentication_methods delete:me:authentication_methods
+# Keep: openid profile email offline_access read:reports create:reports edit:reports delete:reports read:analytics
+
+# 4. Restart dev server
+npm run dev
+```
+
+**After reverting, the old system will work with these API endpoints:**
+- `/api/mfa` - GET (list enrollments), POST (create enrollment), DELETE (remove enrollment)
+- `/api/mfa-reset` - POST (reset all MFA)
+- `/api/step-up-challenge` - POST (SMS step-up)
+- `/api/mfa-any-enrollment` - POST (Guardian enrollment ticket)
+- `/api/mfa-enrollment-complete` - POST (phone verification)
+- `/api/email-verification` - POST (email verification)
+
+**Files Created for My Account API (can be kept for future use):**
+- `src/lib/my-account-api.ts` - My Account API service layer
+- `src/lib/step-up-auth.ts` - Step-up authentication utilities
+- `src/app/api/mfa/factors/route.ts` - List factors endpoint
+- `src/app/api/mfa/methods/route.ts` - Methods CRUD endpoint
+- `src/app/api/mfa/methods/[methodId]/route.ts` - Individual method endpoint
+- `docs/mfa-implementation/MY_ACCOUNT_API_SETUP.md` - Setup documentation
+- `docs/mfa-implementation/MFA_TESTING_GUIDE.md` - Testing documentation
+- `docs/mfa-implementation/MFA_IMPLEMENTATION_SUMMARY.md` - Implementation summary
+- `docs/mfa-implementation/MFA_ROLLBACK.md` - Rollback instructions
+- `docs/mfa-implementation/GIT_COMMIT_MESSAGE.txt` - Pre-written commit message
+
+**Validation Schemas Added:**
+In `src/lib/validations.ts`, these schemas were added:
+- `mfaMethodIdSchema`
+- `enrollMfaFactorSchema`
+- `updateMfaMethodSchema`
+
+These schemas are safe to keep even if reverting to the old system.
+
+**When Auth0 Activates My Account API:**
+
+Once the feature flags are enabled in your Auth0 tenant:
+
+1. Switch back to My Account API implementation:
+```bash
+mv src/components/profile/mfa-enrollment.tsx src/components/profile/mfa-enrollment-old.tsx.backup
+mv src/components/profile/mfa-enrollment-myaccount.tsx src/components/profile/mfa-enrollment.tsx
+```
+
+2. Update `.env.local` with My Account API scopes:
+```env
+AUTH0_SCOPE='openid profile email offline_access read:me:authentication_methods create:me:authentication_methods update:me:authentication_methods delete:me:authentication_methods read:reports create:reports edit:reports delete:reports read:analytics'
+```
+
+3. Create client grant in Auth0 Dashboard (Applications → APIs → MyAccount API)
+
+4. Restart server and test enrollment flow
+
+5. Follow `docs/mfa-implementation/MY_ACCOUNT_API_SETUP.md` for complete configuration steps
+
+### 9. Kong API Gateway Integration
 
 **Kong Konnect** (`kong-019c989905usehqbh.kongcloud.dev`) sits as an API gateway layer between the frontend and backend APIs, providing JWT validation, rate limiting, CORS handling, and request transformation.
 

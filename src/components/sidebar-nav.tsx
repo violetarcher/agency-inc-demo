@@ -12,7 +12,8 @@ import {
   Search,
   BarChart3,
   FolderOpen,
-  Shield
+  Shield,
+  User
 } from 'lucide-react';
 
 interface SidebarNavProps {
@@ -93,6 +94,18 @@ export function SidebarNav({ roles }: SidebarNavProps) {
         <Link href="/api-gateway">
           <Shield className="mr-2 h-4 w-4" />
           API Gateway
+        </Link>
+      </Button>
+
+      {/* Profile Management */}
+      <Button
+        asChild
+        variant={pathname === '/profile' ? 'secondary' : 'ghost'}
+        className="w-full justify-start"
+      >
+        <Link href="/profile">
+          <User className="mr-2 h-4 w-4" />
+          Profile Management
         </Link>
       </Button>
 
