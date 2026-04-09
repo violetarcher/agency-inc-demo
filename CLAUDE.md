@@ -400,11 +400,41 @@ if (response.status === 403 && data.requiresStepUp) {
 - Email verification section remains separate from MFA management (user preference)
 
 **Current Status (December 2024):**
-⚠️ **My Account API implementation complete but pending Auth0 feature flag activation**
-- ESD (Enterprise Support Desk) ticket opened with Auth0
-- Waiting for feature flags to enable My Account API scopes in tenant
-- Implementation code is production-ready but not yet functional
-- Old MFA system backed up and can be restored if needed
+⚠️ **My Account API available - Client Grant Setup Required**
+
+**Critical Setup Step - Client Grant:**
+The most common reason for 404 errors is missing the **client grant** that authorizes your application to request My Account API scopes.
+
+**What you need to do:**
+1. 🚨 **Create Client Grant** (Auth0 Dashboard → Applications → APIs → MyAccount API)
+   - Navigate to "Machine to Machine Applications" tab
+   - Toggle your application ON
+   - Select these 5 scopes:
+     - `create:me:authentication_methods`
+     - `read:me:authentication_methods`
+     - `update:me:authentication_methods`
+     - `delete:me:authentication_methods`
+     - `read:me:factors`
+   - Click "Update"
+   - **Detailed Guide:** `docs/mfa-implementation/CLIENT_GRANT_SETUP.md`
+
+2. ✅ **Update Environment Variables** (already done if you added scopes to `AUTH0_SCOPE`)
+
+3. 🔄 **Restart Server** and re-login to get new access token
+
+**Understanding Client Grants:**
+- Having scopes in `AUTH0_SCOPE` = What your app **requests**
+- Client grant = What Auth0 **allows** your app to request
+- Without the grant, tokens won't have My Account API audience, causing 404 errors
+
+**Available Permissions:**
+- `create:me:authentication_methods`, `read:me:authentication_methods`, `update:me:authentication_methods`, `delete:me:authentication_methods`, `read:me:factors`, `create:me:connected_accounts`, `read:me:connected_accounts`, `delete:me:connected_accounts`
+
+**Next Steps:**
+1. **First:** Create client grant (see `docs/mfa-implementation/CLIENT_GRANT_SETUP.md`)
+2. **Then:** Follow `docs/mfa-implementation/ACTIVATION_CHECKLIST.md`
+3. **If issues:** See `docs/mfa-implementation/TROUBLESHOOTING_404.md`
+4. **If needed:** Rollback to legacy system (see rollback section below)
 
 **Rollback Information:**
 
