@@ -5,7 +5,7 @@ import { OrgSwitcher } from './org-switcher';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { LogIn, LogOut } from 'lucide-react';
+import { LogIn, LogOut, Wallet } from 'lucide-react';
 
 export async function Sidebar() {
   const session = await getSession();
@@ -14,19 +14,24 @@ export async function Sidebar() {
 
   const orgName = user?.['https://agency-inc-demo.com/org_name'] || '';
   const orgLogo = user?.['https://agency-inc-demo.com/org_logo'];
-  const companyName = orgName ? `SaaS+ | ${orgName}` : 'SaaS+';
-  const logoUrl = orgLogo || "https://auth0images.s3.us-east-2.amazonaws.com/Auth0+Official+Icons/auth0-identicons/icon-api.png";
+  const companyName = orgName ? `SecurePay | ${orgName}` : 'SecurePay Portal';
 
   return (
     <aside className="hidden w-64 flex-col border-r bg-background p-4 md:flex">
       <div className="mb-4 flex items-center gap-3">
-        <Image
-          src={logoUrl}
-          alt={`${companyName} Logo`}
-          width={32}
-          height={32}
-          className="rounded-md"
-        />
+        {orgLogo ? (
+          <Image
+            src={orgLogo}
+            alt={`${companyName} Logo`}
+            width={32}
+            height={32}
+            className="rounded-md"
+          />
+        ) : (
+          <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary text-primary-foreground">
+            <Wallet className="h-5 w-5" />
+          </div>
+        )}
         <h2 className="text-xl font-bold">{companyName}</h2>
       </div>
 

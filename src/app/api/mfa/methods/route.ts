@@ -7,11 +7,6 @@ import {
   MyAccountAPIError,
 } from '@/lib/my-account-api';
 import { enrollMfaFactorSchema } from '@/lib/validations';
-import {
-  requireStepUpAuth,
-  createStepUpResponse,
-  StepUpRequiredError,
-} from '@/lib/step-up-auth';
 
 /**
  * GET /api/mfa/methods
@@ -74,7 +69,7 @@ export const GET = withApiAuthRequired(async function GET(request: NextRequest) 
  * POST /api/mfa/methods
  *
  * Enrolls a new MFA factor for the current user.
- * Requires step-up authentication (MFA re-verification).
+ * Note: Step-up authentication removed to allow first-factor enrollment.
  *
  * Request Body:
  * {
@@ -87,7 +82,6 @@ export const GET = withApiAuthRequired(async function GET(request: NextRequest) 
  * Returns:
  * - 201: Enrolled authentication method
  * - 400: Validation error
- * - 403: Step-up authentication required
  * - 401: Unauthorized
  * - 500: Server error
  */
@@ -103,15 +97,8 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
       );
     }
 
-    // Require step-up authentication for enrolling new MFA factors
-    try {
-      await requireStepUpAuth('/profile?tab=security');
-    } catch (error) {
-      if (error instanceof StepUpRequiredError) {
-        return createStepUpResponse('/profile?tab=security');
-      }
-      throw error;
-    }
+    // Step-up authentication removed - users need to be able to enroll their first MFA factor
+    // without already having MFA enabled (chicken-and-egg problem)
 
     // Parse and validate request body
     const body = await request.json();
@@ -187,13 +174,12 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
  * DELETE /api/mfa/methods
  *
  * Removes ALL enrolled MFA factors (MFA reset).
- * Requires step-up authentication (MFA re-verification).
+ * Note: Step-up authentication removed for consistency with enrollment.
  *
  * This is a destructive operation that should require user confirmation.
  *
  * Returns:
  * - 200: All methods deleted successfully
- * - 403: Step-up authentication required
  * - 401: Unauthorized
  * - 500: Server error
  */
@@ -209,15 +195,8 @@ export const DELETE = withApiAuthRequired(async function DELETE(request: NextReq
       );
     }
 
-    // Require step-up authentication for removing all MFA factors
-    try {
-      await requireStepUpAuth('/profile?tab=security');
-    } catch (error) {
-      if (error instanceof StepUpRequiredError) {
-        return createStepUpResponse('/profile?tab=security');
-      }
-      throw error;
-    }
+    // Step-up authentication removed for consistency with enrollment
+    // User confirmation still required in UI before calling this endpoint
 
     console.log('🗑️ Resetting all MFA factors for user:', user.sub);
 

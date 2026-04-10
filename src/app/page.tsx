@@ -22,22 +22,22 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { DollarSign, FileText, CheckCircle, Clock, LogIn, AlertTriangle } from "lucide-react"
+import { DollarSign, FileText, CheckCircle, Clock, LogIn, AlertTriangle, CreditCard, Calendar } from "lucide-react"
 
 // Fictitious data for the dashboard
 const kpiData = [
-  { title: "Monthly Expenses", value: "$12,450", change: "+5.2%", icon: DollarSign, color: "text-green-500" },
-  { title: "Reports Submitted", value: "82", change: "+10", icon: FileText, color: "text-blue-500" },
-  { title: "Pending Approval", value: "7", change: "-2", icon: Clock, color: "text-yellow-500" },
-  { title: "Approved This Month", value: "75", change: "+12", icon: CheckCircle, color: "text-green-500" },
+  { title: "Current Balance", value: "$2,847.50", change: "-$215.00", icon: DollarSign, color: "text-blue-600" },
+  { title: "Next Payment Due", value: "Apr 15", change: "5 days", icon: Calendar, color: "text-orange-500" },
+  { title: "Payments This Month", value: "3", change: "+1", icon: CheckCircle, color: "text-green-600" },
+  { title: "Payment Methods", value: "2", change: "Active", icon: CreditCard, color: "text-blue-500" },
 ];
 
-const recentReports = [
-  { id: "REP-001", user: "Elena Rodriguez", amount: 450.00, status: "Approved" },
-  { id: "REP-002", user: "Marcus Chen", amount: 125.50, status: "Pending" },
-  { id: "REP-003", user: "Sophie Dubois", amount: 890.75, status: "Approved" },
-  { id: "REP-004", user: "Ben Carter", amount: 320.00, status: "Rejected" },
-  { id: "REP-005", user: "Elena Rodriguez", amount: 65.00, status: "Pending" },
+const recentTransactions = [
+  { id: "PAY-1047", payee: "Jennifer Martinez", amount: 285.50, status: "Completed" },
+  { id: "PAY-1046", payee: "Michael Johnson", amount: 425.00, status: "Pending" },
+  { id: "PAY-1045", payee: "Sarah Thompson", amount: 315.75, status: "Completed" },
+  { id: "PAY-1044", payee: "David Chen", amount: 198.00, status: "Failed" },
+  { id: "PAY-1043", payee: "Emily Rodriguez", amount: 340.25, status: "Completed" },
 ];
 
 export default function HomePage() {
@@ -81,15 +81,15 @@ export default function HomePage() {
           <CardHeader className="text-center">
             <CardTitle className="flex items-center justify-center gap-2 text-2xl">
               <FileText className="h-6 w-6 text-blue-600" />
-              SaaS+ Dashboard
+              SecurePay Portal
             </CardTitle>
             <CardDescription>
-              Please log in to access your dashboard and manage your reports.
+              Please log in to access your dashboard and manage your payments.
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center space-y-4">
             <p className="text-gray-600">
-              You need to be logged in to view your dashboard, submit reports, and track expenses.
+              You need to be logged in to view your dashboard, manage payment methods, and track transactions.
             </p>
             <Button asChild size="lg" className="w-full">
               <a href="/api/auth/login" className="flex items-center justify-center gap-2">
@@ -191,9 +191,9 @@ function Dashboard({ user }: { user: any }) {
   return (
     <div className="flex flex-col gap-8">
       <header>
-        <h1 className="text-3xl font-bold">Dashboard Overview</h1>
+        <h1 className="text-3xl font-bold">Payment Dashboard</h1>
         <p className="text-muted-foreground">
-          Welcome back, {user.name || user.email}! Here's your central hub.
+          Welcome back, {user.name || user.email}! Manage your payments and view your account activity.
         </p>
       </header>
 
@@ -215,33 +215,33 @@ function Dashboard({ user }: { user: any }) {
 
       {/* Main Content Area */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        {/* Recent Reports */}
+        {/* Recent Transactions */}
         <Card className="lg:col-span-4">
           <CardHeader>
-            <CardTitle>Recent Reports</CardTitle>
-            <CardDescription>A list of the 5 most recently submitted reports.</CardDescription>
+            <CardTitle>Recent Transactions</CardTitle>
+            <CardDescription>Your most recent payment activity and transaction history.</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Report ID</TableHead>
-                  <TableHead>Submitted By</TableHead>
+                  <TableHead>Transaction ID</TableHead>
+                  <TableHead>Payee</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recentReports.map((report) => (
-                  <TableRow key={report.id}>
-                    <TableCell className="font-medium">{report.id}</TableCell>
-                    <TableCell>{report.user}</TableCell>
-                    <TableCell className="text-right">${report.amount.toFixed(2)}</TableCell>
+                {recentTransactions.map((transaction) => (
+                  <TableRow key={transaction.id}>
+                    <TableCell className="font-medium">{transaction.id}</TableCell>
+                    <TableCell>{transaction.payee}</TableCell>
+                    <TableCell className="text-right">${transaction.amount.toFixed(2)}</TableCell>
                     <TableCell className="text-center">
                       <Badge variant={
-                        report.status === 'Approved' ? 'default' : report.status === 'Pending' ? 'secondary' : 'destructive'
+                        transaction.status === 'Completed' ? 'default' : transaction.status === 'Pending' ? 'secondary' : 'destructive'
                       }>
-                        {report.status}
+                        {transaction.status}
                       </Badge>
                     </TableCell>
                   </TableRow>
@@ -251,11 +251,11 @@ function Dashboard({ user }: { user: any }) {
           </CardContent>
         </Card>
 
-        {/* User Preferences */}
+        {/* Account Settings */}
         <Card className="lg:col-span-3">
           <CardHeader>
-            <CardTitle>User Preferences</CardTitle>
-            <CardDescription>Manage your notification and account settings.</CardDescription>
+            <CardTitle>Account Settings</CardTitle>
+            <CardDescription>Manage your notification and payment preferences.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {isLoading ? (
@@ -267,10 +267,10 @@ function Dashboard({ user }: { user: any }) {
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label htmlFor="autoApproveReports" className="text-sm font-medium">
-                  Auto-Approve Reports
+                  Auto-Pay Enabled
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Automatically approve expense reports
+                  Automatically process scheduled payments
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -292,7 +292,7 @@ function Dashboard({ user }: { user: any }) {
                   Email Notifications
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Receive updates via email
+                  Receive payment alerts via email
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -314,7 +314,7 @@ function Dashboard({ user }: { user: any }) {
                   SMS Notifications
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Receive text message notifications
+                  Receive payment reminders via text
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -333,10 +333,10 @@ function Dashboard({ user }: { user: any }) {
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label htmlFor="systemAlerts" className="text-sm font-medium">
-                  Alert Preferences
+                  Payment Alerts
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Receive important system alerts
+                  Receive due date and balance reminders
                 </p>
               </div>
               <div className="flex items-center gap-3">

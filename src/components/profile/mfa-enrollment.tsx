@@ -160,15 +160,6 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
         setEnrollDialogOpen(false);
         setSelectedFactor(null);
         setEnrollmentData({ phoneNumber: '', email: '', name: '' });
-      } else if (response.status === 403 && data.requiresStepUp) {
-        // Handle step-up authentication requirement
-        toast.info('Additional Verification Required', {
-          description: 'Redirecting to complete multi-factor authentication...',
-        });
-
-        setTimeout(() => {
-          window.location.href = data.redirectUrl;
-        }, 1500);
       } else {
         toast.error('Enrollment Failed', {
           description: data.message || 'Failed to enroll MFA factor. Please try again.',
@@ -203,15 +194,6 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
         await fetchEnrolledMethods();
         setDeleteDialogOpen(false);
         setMethodToDelete(null);
-      } else if (response.status === 403 && data.requiresStepUp) {
-        // Handle step-up authentication requirement
-        toast.info('Additional Verification Required', {
-          description: 'Redirecting to complete multi-factor authentication...',
-        });
-
-        setTimeout(() => {
-          window.location.href = data.redirectUrl;
-        }, 1500);
       } else {
         toast.error('Removal Failed', {
           description: data.message || 'Failed to remove MFA method. Please try again.',
@@ -248,15 +230,6 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
 
         // Refresh methods
         await fetchEnrolledMethods();
-      } else if (response.status === 403 && data.requiresStepUp) {
-        // Handle step-up authentication requirement
-        toast.info('Additional Verification Required', {
-          description: 'Redirecting to complete multi-factor authentication...',
-        });
-
-        setTimeout(() => {
-          window.location.href = data.redirectUrl;
-        }, 1500);
       } else {
         toast.error('Reset Failed', {
           description: data.message || 'Failed to reset MFA. Please try again.',
@@ -560,8 +533,8 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
                       {/* Info Box */}
                       <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                         <p className="text-sm text-blue-800">
-                          <strong>Note:</strong> You may be prompted to complete multi-factor
-                          authentication before enrolling this method.
+                          <strong>Note:</strong> You can enroll multiple authentication methods
+                          to secure your account.
                         </p>
                       </div>
                     </div>

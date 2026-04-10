@@ -7,11 +7,6 @@ import {
   MyAccountAPIError,
 } from '@/lib/my-account-api';
 import { mfaMethodIdSchema, updateMfaMethodSchema } from '@/lib/validations';
-import {
-  requireStepUpAuth,
-  createStepUpResponse,
-  StepUpRequiredError,
-} from '@/lib/step-up-auth';
 
 /**
  * GET /api/mfa/methods/[methodId]
@@ -189,11 +184,10 @@ export async function PATCH(
  * DELETE /api/mfa/methods/[methodId]
  *
  * Removes a specific enrolled MFA factor.
- * Requires step-up authentication (MFA re-verification).
+ * Note: Step-up authentication removed for consistency with enrollment.
  *
  * Returns:
  * - 200: Method deleted successfully
- * - 403: Step-up authentication required
  * - 404: Method not found
  * - 401: Unauthorized
  * - 500: Server error
@@ -223,15 +217,7 @@ export async function DELETE(
         );
       }
 
-      // Require step-up authentication for removing MFA factors
-      try {
-        await requireStepUpAuth('/profile?tab=security');
-      } catch (error) {
-        if (error instanceof StepUpRequiredError) {
-          return createStepUpResponse('/profile?tab=security');
-        }
-        throw error;
-      }
+      // Step-up authentication removed for consistency with enrollment
 
       console.log('🗑️ Deleting MFA method:', params.methodId, 'for user:', user.sub);
 

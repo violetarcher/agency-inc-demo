@@ -39,14 +39,14 @@ export function SidebarNav({ roles }: SidebarNavProps) {
         </Link>
       </Button>
       
-      <Button 
-        asChild 
-        variant={pathname === '/reports' ? 'secondary' : 'ghost'} 
+      <Button
+        asChild
+        variant={pathname === '/reports' ? 'secondary' : 'ghost'}
         className="w-full justify-start"
       >
         <Link href="/reports">
           <FileText className="mr-2 h-4 w-4" />
-          Reports
+          Transactions
         </Link>
       </Button>
       
