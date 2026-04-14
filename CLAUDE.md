@@ -4,7 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a B2B SaaS application demonstrating enterprise-grade identity and authorization patterns using Auth0 Organizations, Auth0 FGA (Fine-Grained Authorization), and Next.js 14 App Router. The application showcases multi-tenant architecture, session management, step-up MFA, and document management with relationship-based access control.
+This is a B2B SaaS application demonstrating enterprise-grade identity and authorization patterns using Auth0 Organizations, Auth0 FGA (Fine-Grained Authorization), and Next.js 14 App Router. The application showcases multi-tenant architecture, session management, step-up MFA, CIBA (Client-Initiated Backchannel Authentication), and document management with relationship-based access control.
+
+**Key Features:**
+- **Healthcare Claims Processing** with CIBA push notification approval
+- **Multi-tenant Organizations** with fine-grained access control
+- **Session Management** with real-time enforcement
+- **Step-Up MFA** for sensitive operations
+- **Kong API Gateway** integration with JWT validation
+
+**Branding:**
+- Primary color: Dark navy blue (#0a1d73)
+- Configured in `src/app/globals.css` as HSL values: `230 84% 25%`
+- Custom Universal Login template with split background design
+- Healthcare-focused UI with SecureHealth Portal branding
 
 ## Development Commands
 
@@ -255,7 +268,67 @@ curl https://login.authskye.org/.well-known/openid-configuration
 curl https://login.authskye.org/.well-known/jwks.json
 ```
 
-### 7. Step-Up MFA
+### 7. Universal Login Customization
+
+The application uses a **custom Universal Login template** with branded background and healthcare feature highlights positioned on the right side of the login screen.
+
+**Template Location:** `auth0-templates/universal-login-template.html`
+
+**Design:**
+- Split background: Dark navy blue (#0a1d73) on left 40%, white on right 60%
+- Auth0 widget positioned on left side (100px from edge)
+- Healthcare benefit cards displayed on right side with gradient icons
+- Responsive: hides features on mobile, centers widget
+
+**Key Implementation Details:**
+
+**Manual Widget Positioning:**
+To position the widget on the left, the template omits the `_widget-auto-layout` class from the `<body>` tag and uses custom CSS:
+
+```html
+<body>
+  <style>
+    body {
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+      padding-left: 100px;
+      background: linear-gradient(to right, #0a1d73 0%, #0a1d73 40%, #ffffff 40%, #ffffff 100%);
+    }
+  </style>
+
+  <div class="features-background">
+    <!-- Healthcare features on right side -->
+  </div>
+
+  {%- auth0:widget -%}
+</body>
+```
+
+**Features Displayed:**
+1. **Virtual Care** (orange icon) - 24/7 provider access
+2. **Track Coverage** (teal icon) - ID card, claims, EOBs
+3. **Care Team** (purple icon) - Support and guidance
+
+**Deployment:**
+1. Copy contents of `auth0-templates/universal-login-template.html`
+2. Navigate to Auth0 Dashboard → Branding → Universal Login
+3. Click "Advanced Customization"
+4. Paste template code
+5. Click "Save"
+
+**Resetting to Default:**
+To remove custom template and return to Auth0 default:
+- Auth0 Dashboard → Branding → Universal Login → Advanced Customization
+- Click "Reset to Default" button
+
+**Important Notes:**
+- Template uses Liquid syntax for dynamic content: `{{ clientName }}`, `{{ organization.display_name }}`
+- Features section uses `pointer-events: none` to prevent interaction
+- Widget container gets `z-index: 10` to sit above background
+- Mobile breakpoint at 968px hides features and centers widget
+
+### 8. Step-Up MFA
 
 Sensitive operations trigger step-up authentication:
 
@@ -273,7 +346,199 @@ if (event.transaction.acr_values.includes('multi-factor')) {
 }
 ```
 
-### 8. My Account API for MFA Management
+### 9. CIBA (Client-Initiated Backchannel Authentication)
+
+The application implements **CIBA** for high-assurance authentication of sensitive transactions. CIBA enables out-of-band authentication via Auth0 Guardian push notifications, requiring users to approve sensitive operations (like claim submissions with banking information) on their mobile device.
+
+**Documentation:** https://auth0.com/docs/get-started/authentication-and-authorization-flow/client-initiated-backchannel-authentication-flow
+
+**Use Case:** Out-of-network healthcare claim submission with direct deposit information
+
+**Architecture Flow:**
+```
+User submits form → Initiate CIBA → Auth0 sends Guardian push
+                         ↓
+                   Poll for approval (every 5 seconds)
+                         ↓
+              User approves on mobile → Submit claim
+```
+
+**Key Components:**
+- `src/app/api/ciba/initiate/route.ts` - Initiates CIBA authentication request
+- `src/app/api/ciba/poll/route.ts` - Polls Auth0 for approval status
+- `src/components/claims/claim-submission-form.tsx` - Claims form with CIBA integration
+- `src/components/claims/claims-list.tsx` - Displays submitted claims
+- `src/app/claims/page.tsx` - Claims management page (2-column layout)
+
+**Implementation Pattern:**
+
+**1. Initiate CIBA Request:**
+```typescript
+const cibaResponse = await fetch('/api/ciba/initiate', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    scope: 'openid profile email',
+    binding_message: 'Approve claim: 285.00 USD', // Alphanumerics + +-_.,:# only
+  }),
+});
+
+const { auth_req_id, expires_in } = await cibaResponse.json();
+```
+
+**2. Poll for Approval:**
+```typescript
+const pollInterval = 5000; // 5 seconds (Auth0 recommended)
+
+const poll = async () => {
+  const response = await fetch('/api/ciba/poll', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ auth_req_id }),
+  });
+
+  const data = await response.json();
+
+  if (data.status === 'approved') {
+    // User approved - proceed with submission
+  } else if (data.status === 'pending') {
+    // Continue polling
+    setTimeout(poll, pollInterval);
+  } else if (data.status === 'denied' || data.status === 'expired') {
+    // Handle rejection/timeout
+  }
+};
+```
+
+**3. Backend CIBA Initiation:**
+```typescript
+// src/app/api/ciba/initiate/route.ts
+const loginHintPayload = JSON.stringify({
+  format: 'iss_sub',
+  iss: `https://${process.env.AUTH0_MGMT_DOMAIN}/`, // Canonical domain with trailing slash
+  sub: user.sub
+});
+
+const cibaParams = new URLSearchParams({
+  client_id: process.env.AUTH0_CLIENT_ID!,
+  client_secret: process.env.AUTH0_CLIENT_SECRET!,
+  scope,
+  login_hint: loginHintPayload,
+  binding_message, // Optional context for user
+  requested_expiry: '300', // Triggers push notification
+});
+
+const cibaResponse = await fetch(
+  `${process.env.AUTH0_ISSUER_BASE_URL}/oauth/ciba/token`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: cibaParams.toString(),
+  }
+);
+```
+
+**4. Backend Polling:**
+```typescript
+// src/app/api/ciba/poll/route.ts
+const tokenParams = new URLSearchParams({
+  client_id: process.env.AUTH0_CLIENT_ID!,
+  client_secret: process.env.AUTH0_CLIENT_SECRET!,
+  grant_type: 'urn:openid:params:grant-type:ciba',
+  auth_req_id,
+});
+
+const tokenResponse = await fetch(
+  `${process.env.AUTH0_ISSUER_BASE_URL}/oauth/token`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: tokenParams.toString(),
+  }
+);
+
+const tokenData = await tokenResponse.json();
+
+// Handle responses:
+// - authorization_pending: User hasn't responded yet
+// - access_token present: User approved
+// - access_denied: User denied
+// - expired_token: Request expired
+// - slow_down: Reduce polling frequency
+```
+
+**Critical Implementation Details:**
+
+1. **login_hint Format:**
+   - Must be valid JSON with `format: 'iss_sub'`
+   - `iss` field must be canonical domain with trailing slash: `https://archfaktor.us.auth0.com/`
+   - `sub` field is the user's Auth0 ID
+   - Using custom domain for `iss` will cause errors
+
+2. **binding_message Restrictions:**
+   - Only alphanumerics, whitespace, and `+-_.,:#` characters allowed
+   - No special characters like `$`, parentheses, or quotes
+   - Example: `"Approve claim: 285.00 USD"` ✅
+   - Example: `"Approve claim for $285"` ❌ (contains `$`)
+
+3. **Polling Configuration:**
+   - Poll every 5 seconds (Auth0 recommended, avoids rate limits)
+   - Minimum 60-second timeout to allow user response time
+   - Handle `slow_down` error by treating as `pending`
+   - Continue polling on network errors (temporary issues)
+
+4. **requested_expiry:**
+   - Set to `300` seconds (5 minutes) or lower to trigger Guardian push
+   - Higher values may use polling-only mode without push
+
+**UI Features:**
+
+- **Demo Data Autofill:** 4 cycling demo scenarios for live demonstrations
+- **Compact Form:** Two-column layout with small inputs (h-8, text-xs labels)
+- **Auto-Refresh:** Claims list automatically refreshes after successful submission
+- **CIBA Status Alert:** Real-time feedback during authentication flow
+- **File Upload:** Superbill (PDF) upload with validation
+
+**Claims Data Model:**
+```typescript
+{
+  userId: string,           // Auth0 user ID
+  organizationId: string,   // Multi-tenant isolation
+  serviceDate: string,      // ISO date
+  providerName: string,
+  providerNPI?: string,     // National Provider Identifier
+  diagnosisCode?: string,   // ICD-10 code
+  claimAmount: number,
+  description?: string,
+  bankInfo: {
+    routingNumberLast4: string,  // Only store last 4 digits
+    accountNumberLast4: string,  // Only store last 4 digits
+  },
+  superbillInfo: {
+    fileName: string,
+    fileSize: number,
+    fileType: string,
+  },
+  status: 'pending' | 'approved' | 'denied',
+  submittedAt: string,      // ISO timestamp
+}
+```
+
+**Security Considerations:**
+- Banking information encrypted in transit and at rest
+- Only last 4 digits stored in Firestore
+- CIBA provides non-repudiation for sensitive transactions
+- Guardian push shows transaction context in binding_message
+- Auto-logout on CIBA denial to prevent unauthorized access
+
+**Common Issues:**
+
+1. **Polling hangs:** Polling intervals <5 seconds may trigger rate limits
+2. **login_hint errors:** Ensure canonical domain with trailing slash
+3. **binding_message errors:** Remove special characters, use only allowed set
+4. **No Guardian push:** Ensure `requested_expiry` ≤ 300 seconds
+
+### 9. My Account API for MFA Management
 
 The application uses **Auth0 My Account API** for user self-service MFA management. This allows users to enroll, view, and remove their own authentication methods without admin intervention.
 
@@ -538,7 +803,7 @@ AUTH0_SCOPE='openid profile email offline_access read:me:authentication_methods 
 
 5. Follow `docs/mfa-implementation/MY_ACCOUNT_API_SETUP.md` for complete configuration steps
 
-### 9. Kong API Gateway Integration
+### 10. Kong API Gateway Integration
 
 **Kong Konnect** (`kong-019c989905usehqbh.kongcloud.dev`) sits as an API gateway layer between the frontend and backend APIs, providing JWT validation, rate limiting, CORS handling, and request transformation.
 
@@ -917,6 +1182,13 @@ When working on demo branches, remember that branding changes are cosmetic - the
 - `src/lib/session-revocation.ts` - Revocation tracking
 - `src/app/api/auth/[...auth0]/route.ts` - Auth0 handler with step-up MFA
 - `src/app/api/auth/token/route.ts` - Access token retrieval for Kong requests
+- `src/app/api/ciba/initiate/route.ts` - CIBA authentication initiation
+- `src/app/api/ciba/poll/route.ts` - CIBA approval polling
+- `src/app/api/claims/submit/route.ts` - Claim submission (post-CIBA)
+- `src/app/api/claims/list/route.ts` - Claims list retrieval
+- `src/components/claims/claim-submission-form.tsx` - Claims form with CIBA
+- `src/components/claims/claims-list.tsx` - Claims list display
+- `src/app/claims/page.tsx` - Claims management page
 - `src/app/api/organization/members/route.ts` - Organization invitations with custom domain header
 - `src/app/api/kong-protected/analytics/route.ts` - Kong-protected endpoint example
 - `src/app/api-gateway/page.tsx` - Kong Gateway demo page
@@ -924,6 +1196,8 @@ When working on demo branches, remember that branding changes are cosmetic - the
 - `src/components/mermaid-diagram.tsx` - Mermaid diagram component
 - `kong/kong-oidc.yaml` - Kong declarative configuration
 - `kong/KONG-SETUP.md` - Kong setup guide
+- `auth0-templates/universal-login-template.html` - Custom Universal Login template
+- `src/app/globals.css` - Global styles and branding colors
 - `revoked-sessions.json` - Session blacklist (project root)
 - `.env.local` - Environment configuration
 
