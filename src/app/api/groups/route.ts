@@ -13,7 +13,7 @@ export const GET = withApiAuthRequired(async function GET(request: NextRequest) 
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -23,7 +23,6 @@ export const GET = withApiAuthRequired(async function GET(request: NextRequest) 
     // Fetch all groups for the organization
     const groupsSnapshot = await db
       .collection('groups')
-      .where('organizationId', '==', user.org_id)
       .get();
 
     const groups = groupsSnapshot.docs.map((doc) => ({
@@ -50,7 +49,7 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -82,7 +81,7 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
     const groupData = {
       name,
       description: description || '',
-      organizationId: user.org_id,
+      organizationId: user.org_id || null,
       createdBy: user.sub,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

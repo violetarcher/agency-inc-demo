@@ -23,7 +23,7 @@ export const GET = withApiAuthRequired(async function GET(
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -46,11 +46,6 @@ export const GET = withApiAuthRequired(async function GET(
     const groupData = group.data();
 
     // Check if group belongs to user's organization
-    if (groupData?.organizationId !== user.org_id) {
-      return NextResponse.json(
-        { error: 'Group not found' },
-        { status: 404 }
-      );
     }
 
     return NextResponse.json({
@@ -80,7 +75,7 @@ export const PUT = withApiAuthRequired(async function PUT(
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -127,11 +122,6 @@ export const PUT = withApiAuthRequired(async function PUT(
     const groupData = group.data();
 
     // Check if group belongs to user's organization
-    if (groupData?.organizationId !== user.org_id) {
-      return NextResponse.json(
-        { error: 'Group not found' },
-        { status: 404 }
-      );
     }
 
     await groupRef.update(updates);
@@ -166,7 +156,7 @@ export const DELETE = withApiAuthRequired(async function DELETE(
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -198,11 +188,6 @@ export const DELETE = withApiAuthRequired(async function DELETE(
     const groupData = group.data();
 
     // Check if group belongs to user's organization
-    if (groupData?.organizationId !== user.org_id) {
-      return NextResponse.json(
-        { error: 'Group not found' },
-        { status: 404 }
-      );
     }
 
     await groupRef.delete();

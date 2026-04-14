@@ -28,7 +28,7 @@ export const POST = withApiAuthRequired(async function POST(
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -102,7 +102,7 @@ export const DELETE = withApiAuthRequired(async function DELETE(
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }

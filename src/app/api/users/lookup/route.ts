@@ -14,7 +14,7 @@ export const GET = withApiAuthRequired(async function GET(request: NextRequest) 
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -34,28 +34,43 @@ export const GET = withApiAuthRequired(async function GET(request: NextRequest) 
     // Get Auth0 Management API client
     const auth0 = managementClient;
 
-    // Get all members of the organization
-    const orgMembers = await auth0.organizations.getMembers({
-      id: user.org_id,
-    });
+    let foundUser: any;
 
-    if (!orgMembers.data || orgMembers.data.length === 0) {
-      return NextResponse.json(
-        { error: 'No users found in your organization' },
-        { status: 404 }
+    if (user.org_id) {
+      // Organization user: search within organization
+      const orgMembers = await auth0.organizations.getMembers({
+        id: user.org_id,
+      });
+
+      if (!orgMembers.data || orgMembers.data.length === 0) {
+        return NextResponse.json(
+          { error: 'No users found in your organization' },
+          { status: 404 }
+        );
+      }
+
+      foundUser = orgMembers.data.find((member: any) =>
+        member.email?.toLowerCase() === email.toLowerCase()
       );
-    }
 
-    // Find the user with matching email
-    const foundUser = orgMembers.data.find((member: any) =>
-      member.email?.toLowerCase() === email.toLowerCase()
-    );
+      if (!foundUser) {
+        return NextResponse.json(
+          { error: 'User not found in your organization' },
+          { status: 404 }
+        );
+      }
+    } else {
+      // Non-org user: search all users by email
+      const users = await auth0.users.getByEmail(email);
 
-    if (!foundUser) {
-      return NextResponse.json(
-        { error: 'User not found in your organization' },
-        { status: 404 }
-      );
+      if (!users.data || users.data.length === 0) {
+        return NextResponse.json(
+          { error: 'User not found' },
+          { status: 404 }
+        );
+      }
+
+      foundUser = users.data[0];
     }
 
     return NextResponse.json({

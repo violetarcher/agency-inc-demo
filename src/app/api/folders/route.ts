@@ -20,7 +20,7 @@ export const GET = withApiAuthRequired(async function GET(request: NextRequest) 
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -48,8 +48,9 @@ export const GET = withApiAuthRequired(async function GET(request: NextRequest) 
 
     for (let i = 0; i < folderIds.length; i += batchSize) {
       const batch = folderIds.slice(i, i + batchSize);
+
+      // FGA already authorized these folders - just fetch them
       const snapshot = await foldersRef
-        .where('organizationId', '==', user.org_id)
         .where('__name__', 'in', batch)
         .get();
 
@@ -80,7 +81,7 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -118,7 +119,7 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
       name,
       parentId: parentId || null,
       ownerId: user.sub,
-      organizationId: user.org_id,
+      organizationId: user.org_id || null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });

@@ -29,7 +29,7 @@ export const GET = withApiAuthRequired(async function GET(
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -63,13 +63,8 @@ export const GET = withApiAuthRequired(async function GET(
 
     const docData = doc.data();
 
-    // Check if document belongs to user's organization
-    if (docData?.organizationId !== user.org_id) {
-      return NextResponse.json(
-        { error: 'Document not found' },
-        { status: 404 }
-      );
-    }
+    // FGA already verified can_read permission - no additional checks needed
+    // organizationId is metadata only, not used for authorization
 
     // Check user's permissions
     const canWrite = await checkPermission(fgaUserId, 'can_write', fgaDocId);
@@ -107,7 +102,7 @@ export const PUT = withApiAuthRequired(async function PUT(
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -154,15 +149,8 @@ export const PUT = withApiAuthRequired(async function PUT(
       );
     }
 
-    const docData = doc.data();
-
-    // Check if document belongs to user's organization
-    if (docData?.organizationId !== user.org_id) {
-      return NextResponse.json(
-        { error: 'Document not found' },
-        { status: 404 }
-      );
-    }
+    // FGA already verified can_write permission - no additional checks needed
+    // organizationId is metadata only, not used for authorization
 
     await docRef.update(updates);
 
@@ -196,7 +184,7 @@ export const DELETE = withApiAuthRequired(async function DELETE(
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -228,15 +216,8 @@ export const DELETE = withApiAuthRequired(async function DELETE(
       );
     }
 
-    const docData = doc.data();
-
-    // Check if document belongs to user's organization
-    if (docData?.organizationId !== user.org_id) {
-      return NextResponse.json(
-        { error: 'Document not found' },
-        { status: 404 }
-      );
-    }
+    // FGA already verified can_change_owner permission - no additional checks needed
+    // organizationId is metadata only, not used for authorization
 
     await docRef.delete();
 

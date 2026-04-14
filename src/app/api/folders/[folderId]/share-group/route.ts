@@ -29,7 +29,7 @@ export const POST = withApiAuthRequired(async function POST(
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -62,11 +62,6 @@ export const POST = withApiAuthRequired(async function POST(
     }
 
     const folderData = folder.data();
-    if (folderData?.organizationId !== user.org_id) {
-      return NextResponse.json(
-        { error: 'Folder not found' },
-        { status: 404 }
-      );
     }
 
     const body = await request.json();
@@ -92,13 +87,7 @@ export const POST = withApiAuthRequired(async function POST(
       );
     }
 
-    const groupData = group.data();
-    if (groupData?.organizationId !== user.org_id) {
-      return NextResponse.json(
-        { error: 'Group not found' },
-        { status: 404 }
-      );
-    }
+    // FGA already verified permission - no additional checks needed
 
     // Assign group to folder in FGA
     const tuple = await assignGroupToFolder(groupId, folderId, permission);
@@ -132,7 +121,7 @@ export const DELETE = withApiAuthRequired(async function DELETE(
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -165,11 +154,6 @@ export const DELETE = withApiAuthRequired(async function DELETE(
     }
 
     const folderData = folder.data();
-    if (folderData?.organizationId !== user.org_id) {
-      return NextResponse.json(
-        { error: 'Folder not found' },
-        { status: 404 }
-      );
     }
 
     const body = await request.json();

@@ -29,7 +29,7 @@ export const GET = withApiAuthRequired(async function GET(
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -64,11 +64,6 @@ export const GET = withApiAuthRequired(async function GET(
     const folderData = folder.data();
 
     // Check if folder belongs to user's organization
-    if (folderData?.organizationId !== user.org_id) {
-      return NextResponse.json(
-        { error: 'Folder not found' },
-        { status: 404 }
-      );
     }
 
     // Check user's permissions
@@ -103,7 +98,7 @@ export const PUT = withApiAuthRequired(async function PUT(
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -153,11 +148,6 @@ export const PUT = withApiAuthRequired(async function PUT(
     const folderData = folder.data();
 
     // Check if folder belongs to user's organization
-    if (folderData?.organizationId !== user.org_id) {
-      return NextResponse.json(
-        { error: 'Folder not found' },
-        { status: 404 }
-      );
     }
 
     await folderRef.update(updates);
@@ -192,7 +182,7 @@ export const DELETE = withApiAuthRequired(async function DELETE(
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -227,11 +217,6 @@ export const DELETE = withApiAuthRequired(async function DELETE(
     const folderData = folder.data();
 
     // Check if folder belongs to user's organization
-    if (folderData?.organizationId !== user.org_id) {
-      return NextResponse.json(
-        { error: 'Folder not found' },
-        { status: 404 }
-      );
     }
 
     await folderRef.delete();

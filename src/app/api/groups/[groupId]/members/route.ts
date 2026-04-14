@@ -24,7 +24,7 @@ export const GET = withApiAuthRequired(async function GET(
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -45,11 +45,6 @@ export const GET = withApiAuthRequired(async function GET(
     }
 
     const groupData = group.data();
-    if (groupData?.organizationId !== user.org_id) {
-      return NextResponse.json(
-        { error: 'Group not found' },
-        { status: 404 }
-      );
     }
 
     // Get member user IDs from FGA
@@ -96,7 +91,7 @@ export const POST = withApiAuthRequired(async function POST(
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -126,11 +121,6 @@ export const POST = withApiAuthRequired(async function POST(
     }
 
     const groupData = group.data();
-    if (groupData?.organizationId !== user.org_id) {
-      return NextResponse.json(
-        { error: 'Group not found' },
-        { status: 404 }
-      );
     }
 
     const body = await request.json();
@@ -191,7 +181,7 @@ export const DELETE = withApiAuthRequired(async function DELETE(
     const session = await getSession();
     const user = session?.user;
 
-    if (!user?.sub || !user?.org_id) {
+    if (!user?.sub) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -221,11 +211,6 @@ export const DELETE = withApiAuthRequired(async function DELETE(
     }
 
     const groupData = group.data();
-    if (groupData?.organizationId !== user.org_id) {
-      return NextResponse.json(
-        { error: 'Group not found' },
-        { status: 404 }
-      );
     }
 
     const body = await request.json();
