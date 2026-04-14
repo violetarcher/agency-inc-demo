@@ -7,8 +7,8 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import './globals.css';
 
 export const metadata = {
-  title: 'SecurePay Portal',
-  description: 'Secure Payment Management Platform',
+  title: 'SecureHealth Portal',
+  description: 'Secure Healthcare Management Platform',
 };
 
 export default function RootLayout({
@@ -33,7 +33,7 @@ export default function RootLayout({
                   {children}
                 </main>
               </div>
-              <Toaster />
+              <Toaster position="top-right" />
             </ThemeProvider>
           </AuthWrapper>
         </ErrorBoundary>

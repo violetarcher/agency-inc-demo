@@ -4,25 +4,26 @@
 
 @layer base {
   :root {
+    /* Oscar Health Branding - Deep Navy Blue + Purple */
     --background: 0 0% 100%;
-    --foreground: 210 15% 20%;
+    --foreground: 230 40% 15%;
     --card: 0 0% 100%;
-    --card-foreground: 210 15% 20%;
+    --card-foreground: 230 40% 15%;
     --popover: 0 0% 100%;
-    --popover-foreground: 210 15% 20%;
-    --primary: 195 75% 45%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 195 30% 96%;
-    --secondary-foreground: 210 15% 20%;
-    --muted: 195 20% 96%;
-    --muted-foreground: 210 10% 45%;
-    --accent: 195 75% 96%;
-    --accent-foreground: 195 75% 30%;
+    --popover-foreground: 230 40% 15%;
+    --primary: 245 75% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 245 60% 95%;
+    --secondary-foreground: 230 40% 15%;
+    --muted: 230 15% 95%;
+    --muted-foreground: 230 15% 45%;
+    --accent: 245 75% 92%;
+    --accent-foreground: 245 75% 35%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 195 20% 88%;
-    --input: 195 20% 88%;
-    --ring: 195 75% 45%;
+    --border: 230 15% 88%;
+    --input: 230 15% 88%;
+    --ring: 245 75% 60%;
     --radius: 0.5rem;
   }
  

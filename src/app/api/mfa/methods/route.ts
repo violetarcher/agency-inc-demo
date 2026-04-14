@@ -1,17 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { withApiAuthRequired, getSession } from '@auth0/nextjs-auth0';
-import {
-  listAuthenticationMethods,
-  createAuthenticationMethod,
-  deleteAllAuthenticationMethods,
-  MyAccountAPIError,
-} from '@/lib/my-account-api';
+import { withApiAuthRequired, getSession, getAccessToken } from '@auth0/nextjs-auth0';
 import { enrollMfaFactorSchema } from '@/lib/validations';
 
 /**
  * GET /api/mfa/methods
  *
- * Lists all enrolled authentication methods (MFA factors) for the current user.
+ * Lists all enrolled authentication methods (MFA factors) for the current user via My Account API.
  *
  * Returns:
  * - 200: Array of enrolled authentication methods
@@ -30,30 +24,66 @@ export const GET = withApiAuthRequired(async function GET(request: NextRequest) 
       );
     }
 
-    console.log('📋 Fetching enrolled MFA methods for user:', user.sub);
+    // Get access token with My Account API audience
+    const { accessToken } = await getAccessToken();
 
-    // List all enrolled authentication methods
-    const methods = await listAuthenticationMethods();
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: 'No access token available', message: 'Please re-authenticate' },
+        { status: 401 }
+      );
+    }
 
-    return NextResponse.json({
-      success: true,
-      methods,
-      count: methods.length,
+    console.log('📋 Fetching enrolled MFA methods via My Account API for user:', user.sub);
+
+    // Construct My Account API endpoint URL
+    const myAccountDomain = process.env.AUTH0_ISSUER_BASE_URL!.replace('https://', '');
+    const myAccountUrl = `https://${myAccountDomain}/me/authentication-methods`;
+
+    // Call My Account API
+    const response = await fetch(myAccountUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
     });
-  } catch (error: any) {
-    console.error('❌ Failed to fetch MFA methods:', error);
 
-    // Handle My Account API errors
-    if (error instanceof MyAccountAPIError) {
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      console.error('❌ My Account API error:', response.status, errorData);
+
+      // If 404, My Account API might not be activated
+      if (response.status === 404) {
+        return NextResponse.json(
+          {
+            error: 'My Account API not available',
+            message: 'My Account API may not be activated in your Auth0 tenant',
+            statusCode: 404,
+          },
+          { status: 404 }
+        );
+      }
+
       return NextResponse.json(
         {
           error: 'Failed to fetch MFA methods',
-          message: error.message,
-          details: error.details,
+          message: errorData.message || errorData.error || 'An unexpected error occurred',
+          statusCode: response.status,
         },
-        { status: error.statusCode }
+        { status: response.status }
       );
     }
+
+    const methods = await response.json();
+
+    return NextResponse.json({
+      success: true,
+      methods: Array.isArray(methods) ? methods : [],
+      count: Array.isArray(methods) ? methods.length : 0,
+    });
+  } catch (error: any) {
+    console.error('❌ Failed to fetch MFA methods:', error);
 
     return NextResponse.json(
       {
@@ -68,7 +98,7 @@ export const GET = withApiAuthRequired(async function GET(request: NextRequest) 
 /**
  * POST /api/mfa/methods
  *
- * Enrolls a new MFA factor for the current user.
+ * Enrolls a new MFA factor for the current user via My Account API.
  * Note: Step-up authentication removed to allow first-factor enrollment.
  *
  * Request Body:
@@ -97,6 +127,16 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
       );
     }
 
+    // Get access token with My Account API audience
+    const { accessToken } = await getAccessToken();
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: 'No access token available', message: 'Please re-authenticate' },
+        { status: 401 }
+      );
+    }
+
     // Step-up authentication removed - users need to be able to enroll their first MFA factor
     // without already having MFA enabled (chicken-and-egg problem)
 
@@ -115,27 +155,71 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
       );
     }
 
-    const { type, phoneNumber, email, name } = validation.data;
+    const { type, phoneNumber } = validation.data;
 
-    console.log('✨ Enrolling MFA factor:', type, 'for user:', user.sub);
+    console.log('✨ Enrolling MFA factor via My Account API:', type, 'for user:', user.sub);
 
     // Create enrollment request
     const enrollmentRequest: any = { type };
 
-    if (phoneNumber) {
+    if (type === 'sms' || type === 'phone') {
+      if (!phoneNumber) {
+        return NextResponse.json(
+          {
+            error: 'Validation error',
+            message: 'Phone number required for SMS/phone enrollment',
+          },
+          { status: 400 }
+        );
+      }
       enrollmentRequest.phone_number = phoneNumber;
+    } else if (type === 'totp') {
+      enrollmentRequest.authenticator_type = 'otp';
+    } else {
+      return NextResponse.json(
+        {
+          error: 'Not supported',
+          message: `MFA type "${type}" not supported yet. Try SMS or TOTP.`,
+        },
+        { status: 400 }
+      );
     }
 
-    if (email) {
-      enrollmentRequest.email = email;
+    // Construct My Account API endpoint URL
+    const myAccountDomain = process.env.AUTH0_ISSUER_BASE_URL!.replace('https://', '');
+    const myAccountUrl = `https://${myAccountDomain}/me/authentication-methods`;
+
+    console.log('📤 Calling My Account API:', myAccountUrl);
+    console.log('📦 Request body:', enrollmentRequest);
+
+    // Call My Account API
+    const response = await fetch(myAccountUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(enrollmentRequest),
+    });
+
+    console.log('📥 Response status:', response.status);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      console.error('❌ My Account API error:', response.status, errorData);
+
+      return NextResponse.json(
+        {
+          error: 'Failed to enroll MFA factor',
+          message: errorData.message || errorData.error || errorData.error_description || 'An unexpected error occurred',
+          details: errorData,
+          statusCode: response.status,
+        },
+        { status: response.status }
+      );
     }
 
-    if (name) {
-      enrollmentRequest.name = name;
-    }
-
-    // Create authentication method via My Account API
-    const method = await createAuthenticationMethod(enrollmentRequest);
+    const method = await response.json();
 
     return NextResponse.json(
       {
@@ -147,18 +231,6 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
     );
   } catch (error: any) {
     console.error('❌ Failed to enroll MFA factor:', error);
-
-    // Handle My Account API errors
-    if (error instanceof MyAccountAPIError) {
-      return NextResponse.json(
-        {
-          error: 'Failed to enroll MFA factor',
-          message: error.message,
-          details: error.details,
-        },
-        { status: error.statusCode }
-      );
-    }
 
     return NextResponse.json(
       {
@@ -173,7 +245,7 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
 /**
  * DELETE /api/mfa/methods
  *
- * Removes ALL enrolled MFA factors (MFA reset).
+ * Removes ALL enrolled MFA factors (MFA reset) via My Account API.
  * Note: Step-up authentication removed for consistency with enrollment.
  *
  * This is a destructive operation that should require user confirmation.
@@ -195,13 +267,59 @@ export const DELETE = withApiAuthRequired(async function DELETE(request: NextReq
       );
     }
 
+    // Get access token with My Account API audience
+    const { accessToken } = await getAccessToken();
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: 'No access token available', message: 'Please re-authenticate' },
+        { status: 401 }
+      );
+    }
+
     // Step-up authentication removed for consistency with enrollment
     // User confirmation still required in UI before calling this endpoint
 
-    console.log('🗑️ Resetting all MFA factors for user:', user.sub);
+    console.log('🗑️ Resetting all MFA factors via My Account API for user:', user.sub);
 
-    // Delete all authentication methods via My Account API
-    await deleteAllAuthenticationMethods();
+    // Construct My Account API endpoint URL
+    const myAccountDomain = process.env.AUTH0_ISSUER_BASE_URL!.replace('https://', '');
+    const myAccountUrl = `https://${myAccountDomain}/me/authentication-methods`;
+
+    // Get all methods first
+    const getResponse = await fetch(myAccountUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!getResponse.ok) {
+      const errorData = await getResponse.json().catch(() => ({ error: 'Unknown error' }));
+      console.error('❌ Failed to fetch methods for deletion:', errorData);
+      return NextResponse.json(
+        {
+          error: 'Failed to fetch MFA methods',
+          message: errorData.message || 'Could not retrieve methods to delete',
+        },
+        { status: getResponse.status }
+      );
+    }
+
+    const methods = await getResponse.json();
+
+    // Delete each method
+    for (const method of methods) {
+      const deleteUrl = `${myAccountUrl}/${method.id}`;
+      await fetch(deleteUrl, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    }
 
     return NextResponse.json({
       success: true,
@@ -209,18 +327,6 @@ export const DELETE = withApiAuthRequired(async function DELETE(request: NextReq
     });
   } catch (error: any) {
     console.error('❌ Failed to reset MFA:', error);
-
-    // Handle My Account API errors
-    if (error instanceof MyAccountAPIError) {
-      return NextResponse.json(
-        {
-          error: 'Failed to reset MFA',
-          message: error.message,
-          details: error.details,
-        },
-        { status: error.statusCode }
-      );
-    }
 
     return NextResponse.json(
       {

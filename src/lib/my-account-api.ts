@@ -20,9 +20,12 @@ import { getAccessToken } from '@auth0/nextjs-auth0';
 
 /**
  * My Account API Configuration
+ * IMPORTANT: Must use custom domain (issuer base URL) NOT canonical domain
+ * My Account API calls must match the token's issuer/audience domain
  */
-const MY_ACCOUNT_API_AUDIENCE = `https://${process.env.AUTH0_ISSUER_BASE_URL?.replace('https://', '')}/me/`;
-const MY_ACCOUNT_API_BASE_URL = `https://${process.env.AUTH0_ISSUER_BASE_URL?.replace('https://', '')}/me`;
+const myAccountDomain = process.env.AUTH0_ISSUER_BASE_URL!.replace('https://', '');
+const MY_ACCOUNT_API_AUDIENCE = `https://${myAccountDomain}/me/`;
+const MY_ACCOUNT_API_BASE_URL = `https://${myAccountDomain}/me`;
 
 /**
  * Authentication Method Types
@@ -100,13 +103,16 @@ export class MyAccountAPIError extends Error {
  */
 async function getMyAccountAccessToken(): Promise<string> {
   try {
-    // Attempt to get access token with My Account API audience
-    // Note: This will only work if the user's session includes My Account API scopes
-    const result = await getAccessToken({
-      authorizationParams: {
-        audience: MY_ACCOUNT_API_AUDIENCE,
-        scope: 'read:me:authentication_methods create:me:authentication_methods update:me:authentication_methods delete:me:authentication_methods',
-      }
+    console.log('🔑 Requesting My Account API access token from session...');
+    console.log('   Audience:', MY_ACCOUNT_API_AUDIENCE);
+
+    // Get the access token from the session
+    // User must have authenticated with My Account API audience via /api/auth/login?myaccount=true
+    const result = await getAccessToken();
+
+    console.log('✅ Received access token result:', {
+      hasAccessToken: !!result.accessToken,
+      tokenLength: result.accessToken?.length
     });
 
     if (!result.accessToken) {
@@ -117,9 +123,29 @@ async function getMyAccountAccessToken(): Promise<string> {
       );
     }
 
+    // Decode token to see what we got
+    try {
+      const tokenParts = result.accessToken.split('.');
+      if (tokenParts.length === 3) {
+        const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+        console.log('🎫 Token payload:', {
+          aud: payload.aud,
+          scope: payload.scope,
+          sub: payload.sub,
+          exp: payload.exp
+        });
+      }
+    } catch (e) {
+      console.log('⚠️ Could not decode token');
+    }
+
     return result.accessToken;
   } catch (error: any) {
     console.error('❌ Failed to get My Account API access token:', error);
+    console.error('   Error details:', {
+      message: error.message,
+      stack: error.stack?.split('\n').slice(0, 3)
+    });
     throw new MyAccountAPIError(
       'Authentication failed for My Account API',
       401,
@@ -139,6 +165,12 @@ async function myAccountAPIRequest<T>(
 
   const url = `${MY_ACCOUNT_API_BASE_URL}${endpoint}`;
 
+  console.log('📡 Making My Account API request:', {
+    method: options.method || 'GET',
+    url,
+    hasToken: !!accessToken
+  });
+
   const response = await fetch(url, {
     ...options,
     headers: {
@@ -146,6 +178,12 @@ async function myAccountAPIRequest<T>(
       'Content-Type': 'application/json',
       ...options.headers,
     },
+  });
+
+  console.log('📨 My Account API response:', {
+    status: response.status,
+    statusText: response.statusText,
+    url
   });
 
   // Handle rate limiting

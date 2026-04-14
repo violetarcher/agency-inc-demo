@@ -13,7 +13,8 @@ import {
   BarChart3,
   FolderOpen,
   Shield,
-  User
+  User,
+  ClipboardList
 } from 'lucide-react';
 
 interface SidebarNavProps {
@@ -46,10 +47,21 @@ export function SidebarNav({ roles }: SidebarNavProps) {
       >
         <Link href="/reports">
           <FileText className="mr-2 h-4 w-4" />
-          Transactions
+          Reports
         </Link>
       </Button>
-      
+
+      <Button
+        asChild
+        variant={pathname === '/claims' ? 'secondary' : 'ghost'}
+        className="w-full justify-start"
+      >
+        <Link href="/claims">
+          <ClipboardList className="mr-2 h-4 w-4" />
+          Claims
+        </Link>
+      </Button>
+
       <Button 
         asChild 
         variant={pathname === '/inspector' ? 'secondary' : 'ghost'} 

@@ -8,8 +8,7 @@ export const GET = handleAuth({
       const isStepUp = url.searchParams.get('stepup') === 'true';
       const hasInvitation = !!url.searchParams.get('invitation');
       const isAccessRequest = url.searchParams.get('access_request') === 'true';
-      
-      
+
       const authorizationParams: any = {
         audience: process.env.AUTH0_AUDIENCE,
         scope: 'openid profile email offline_access read:reports create:reports edit:reports delete:reports read:analytics',
@@ -43,7 +42,7 @@ export const GET = handleAuth({
 
       // Handle prompt parameter from URL
       const promptParam = url.searchParams.get('prompt');
-      
+
       if (isStepUp) {
         // Add MFA params for step-up
         authorizationParams.acr_values = 'http://schemas.openid.net/pape/policies/2007/06/multi-factor';

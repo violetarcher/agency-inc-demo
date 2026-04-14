@@ -28,7 +28,10 @@ import {
   Fingerprint,
   AlertTriangle,
   Loader2,
+  RefreshCw,
+  Info,
 } from 'lucide-react';
+import { hasMyAccountAudience, hasMyAccountScopes, getMyAccountAuthUrl } from '@/lib/my-account-token';
 
 interface User {
   sub: string;
@@ -66,15 +69,66 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
   const [loading, setLoading] = useState(false);
   const [emailVerificationLoading, setEmailVerificationLoading] = useState(false);
   const [selectedFactor, setSelectedFactor] = useState<MFAFactor | null>(null);
-  const [enrollmentData, setEnrollmentData] = useState({ phoneNumber: '', email: '', name: '' });
+  const [enrollmentData, setEnrollmentData] = useState({ phoneNumber: '', email: '' });
   const [enrollDialogOpen, setEnrollDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [methodToDelete, setMethodToDelete] = useState<AuthenticationMethod | null>(null);
+  const [tokenInfo, setTokenInfo] = useState<{
+    hasToken: boolean;
+    hasMyAccountAudience: boolean;
+    hasMyAccountScopes: boolean;
+    needsReauth: boolean;
+  }>({
+    hasToken: false,
+    hasMyAccountAudience: false,
+    hasMyAccountScopes: false,
+    needsReauth: false,
+  });
 
   useEffect(() => {
+    // Check token capabilities first
+    checkTokenCapabilities();
+
+    // Attempt to fetch - if we get 401, we'll redirect to get My Account API token
     fetchEnrolledMethods();
     fetchAvailableFactors();
   }, []);
+
+  const checkTokenCapabilities = async () => {
+    try {
+      const response = await fetch('/api/auth/token');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.accessToken) {
+          const hasAudience = hasMyAccountAudience(data.accessToken);
+          const hasScopes = hasMyAccountScopes(data.accessToken);
+
+          console.log('🔍 Token Analysis:', {
+            hasToken: true,
+            hasMyAccountAudience: hasAudience,
+            hasMyAccountScopes: hasScopes,
+            needsReauth: !hasAudience || !hasScopes,
+          });
+
+          setTokenInfo({
+            hasToken: true,
+            hasMyAccountAudience: hasAudience,
+            hasMyAccountScopes: hasScopes,
+            needsReauth: !hasAudience || !hasScopes,
+          });
+        } else {
+          setTokenInfo({
+            hasToken: false,
+            hasMyAccountAudience: false,
+            hasMyAccountScopes: false,
+            needsReauth: true,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to check token:', error);
+    }
+  };
 
   const fetchEnrolledMethods = async () => {
     try {
@@ -138,10 +192,6 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
         requestBody.email = enrollmentData.email;
       }
 
-      if (enrollmentData.name) {
-        requestBody.name = enrollmentData.name;
-      }
-
       const response = await fetch('/api/mfa/methods', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -159,7 +209,7 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
         await fetchEnrolledMethods();
         setEnrollDialogOpen(false);
         setSelectedFactor(null);
-        setEnrollmentData({ phoneNumber: '', email: '', name: '' });
+        setEnrollmentData({ phoneNumber: '', email: '' });
       } else {
         toast.error('Enrollment Failed', {
           description: data.message || 'Failed to enroll MFA factor. Please try again.',
@@ -271,6 +321,47 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
     }
   };
 
+  const handleTestMyAccountAPI = async () => {
+    setLoading(true);
+    try {
+      // First check the token
+      const tokenResponse = await fetch('/api/mfa/auth/test-token');
+      const tokenData = await tokenResponse.json();
+
+      console.log('🧪 Token Test Results:', tokenData);
+
+      if (!tokenData.diagnosis.canCallMyAccountAPI) {
+        toast.error('Token Issue Detected', {
+          description: tokenData.diagnosis.issues.join('. '),
+        });
+        return;
+      }
+
+      // Token looks good, try calling My Account API
+      const myAccountResponse = await fetch('/api/mfa/auth/test-myaccount');
+      const myAccountData = await myAccountResponse.json();
+
+      console.log('🧪 My Account API Test Results:', myAccountData);
+
+      if (myAccountData.success) {
+        toast.success('My Account API Working!', {
+          description: `Found ${myAccountData.data?.length || 0} authentication methods.`,
+        });
+      } else {
+        toast.error('My Account API Call Failed', {
+          description: myAccountData.recommendations?.[0] || myAccountData.message,
+        });
+      }
+    } catch (error) {
+      console.error('Test failed:', error);
+      toast.error('Test Failed', {
+        description: 'Failed to test My Account API integration.',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getFactorIcon = (type: string) => {
     const iconClass = 'w-5 h-5';
     switch (type.toLowerCase()) {
@@ -303,6 +394,95 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
 
   return (
     <div className="space-y-6">
+      {/* My Account API Token Status */}
+      {tokenInfo.needsReauth && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardHeader>
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-orange-600 mt-0.5" />
+              <div className="flex-1">
+                <CardTitle className="text-orange-900">Authentication Required</CardTitle>
+                <CardDescription className="text-orange-700 mt-1">
+                  To manage MFA methods, you need to re-authenticate with My Account API permissions.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Token Status Details */}
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between p-2 rounded bg-white/50">
+                <span className="text-orange-800">Access Token</span>
+                <Badge variant={tokenInfo.hasToken ? 'default' : 'secondary'}>
+                  {tokenInfo.hasToken ? 'Present' : 'Missing'}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between p-2 rounded bg-white/50">
+                <span className="text-orange-800">My Account API Audience</span>
+                <Badge variant={tokenInfo.hasMyAccountAudience ? 'default' : 'secondary'}>
+                  {tokenInfo.hasMyAccountAudience ? 'Valid' : 'Missing'}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between p-2 rounded bg-white/50">
+                <span className="text-orange-800">My Account API Scopes</span>
+                <Badge variant={tokenInfo.hasMyAccountScopes ? 'default' : 'secondary'}>
+                  {tokenInfo.hasMyAccountScopes ? 'Valid' : 'Missing'}
+                </Badge>
+              </div>
+            </div>
+
+            <Separator className="bg-orange-200" />
+
+            {/* Re-authenticate Button */}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-orange-700">
+                  Click below to authenticate with My Account API permissions
+                </div>
+                <Button
+                  onClick={() => {
+                    const authUrl = getMyAccountAuthUrl('/profile?tab=security');
+                    console.log('🔄 Redirecting to My Account API auth:', authUrl);
+                    window.location.href = authUrl;
+                  }}
+                  className="bg-orange-600 hover:bg-orange-700"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Re-authenticate
+                </Button>
+              </div>
+
+              {/* Test My Account API Button */}
+              {tokenInfo.hasToken && (
+                <div className="flex items-center justify-between pt-2 border-t border-orange-200">
+                  <div className="text-sm text-orange-700">
+                    Test My Account API integration
+                  </div>
+                  <Button
+                    onClick={handleTestMyAccountAPI}
+                    disabled={loading}
+                    variant="outline"
+                    className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Testing...
+                      </>
+                    ) : (
+                      <>
+                        <Shield className="w-4 h-4 mr-2" />
+                        Test API
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Email Verification Section */}
       <Card>
         <CardHeader>
@@ -457,7 +637,7 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
                     setEnrollDialogOpen(open);
                     if (!open) {
                       setSelectedFactor(null);
-                      setEnrollmentData({ phoneNumber: '', email: '', name: '' });
+                      setEnrollmentData({ phoneNumber: '', email: '' });
                     }
                   }}
                 >
@@ -517,19 +697,6 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
                         </div>
                       )}
 
-                      {/* Optional Name */}
-                      <div className="space-y-2">
-                        <Label htmlFor="name">Display Name (Optional)</Label>
-                        <Input
-                          id="name"
-                          placeholder="e.g., Personal Phone, Work Email"
-                          value={enrollmentData.name}
-                          onChange={(e) =>
-                            setEnrollmentData({ ...enrollmentData, name: e.target.value })
-                          }
-                        />
-                      </div>
-
                       {/* Info Box */}
                       <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                         <p className="text-sm text-blue-800">
@@ -545,7 +712,7 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
                         onClick={() => {
                           setEnrollDialogOpen(false);
                           setSelectedFactor(null);
-                          setEnrollmentData({ phoneNumber: '', email: '', name: '' });
+                          setEnrollmentData({ phoneNumber: '', email: '' });
                         }}
                         disabled={loading}
                       >

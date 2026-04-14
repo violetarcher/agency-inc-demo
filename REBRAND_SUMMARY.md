@@ -1,7 +1,7 @@
-# SecurePay Portal - Payment Platform Rebrand
+# SecureHealth Portal - Healthcare Platform Rebrand
 
 ## Overview
-The application has been rebranded from a generic B2B SaaS app to **SecurePay Portal**, a payment management platform suitable for Systems and Methods Inc. demo.
+The application has been rebranded to **SecureHealth Portal**, a healthcare management platform with Oscar Health branding for insurance provider demos.
 
 ## What Changed
 
