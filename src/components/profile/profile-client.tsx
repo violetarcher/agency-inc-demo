@@ -51,35 +51,22 @@ function TokensSection({ user }: { user: any }) {
 
   const decodeJWT = (token: string): DecodedToken | null => {
     try {
-      console.log('Attempting to decode token:', {
-        hasToken: !!token,
-        tokenType: typeof token,
-        tokenLength: token?.length,
-        tokenPreview: token?.substring(0, 50) + '...'
-      });
-
       if (!token || typeof token !== 'string') {
-        console.warn('Invalid token: not a string or empty');
         return null;
       }
 
       const parts = token.split('.');
       if (parts.length !== 3) {
-        console.warn('Invalid JWT format: expected 3 parts, got', parts.length, 'Parts:', parts.map(p => p.length));
         return null;
       }
 
       // Convert from URL-safe base64 to standard base64 and add padding
       const base64UrlDecode = (str: string) => {
-        // Replace URL-safe characters with standard base64 characters
         str = str.replace(/-/g, '+').replace(/_/g, '/');
-
-        // Add padding if needed
         const missing = str.length % 4;
         if (missing) {
           str += '='.repeat(4 - missing);
         }
-
         return str;
       };
 
@@ -87,11 +74,9 @@ function TokensSection({ user }: { user: any }) {
       const payload = JSON.parse(atob(base64UrlDecode(parts[1])));
       const signature = parts[2];
 
-      console.log('Successfully decoded token:', { header, payloadKeys: Object.keys(payload) });
-
       return { header, payload, signature };
     } catch (error) {
-      console.error('Error decoding JWT:', error, 'Token preview:', token?.substring(0, 50) + '...');
+      console.error('Error decoding JWT:', error);
       return null;
     }
   };

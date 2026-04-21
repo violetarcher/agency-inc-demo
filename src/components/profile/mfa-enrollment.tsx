@@ -30,8 +30,13 @@ import {
   Loader2,
   RefreshCw,
   Info,
+  Copy,
+  Send,
+  Terminal,
 } from 'lucide-react';
 import { hasMyAccountAudience, hasMyAccountScopes, getMyAccountAuthUrl } from '@/lib/my-account-token';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface User {
   sub: string;
@@ -85,14 +90,79 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
     needsReauth: false,
   });
 
+  // API Testing state
+  const [accessToken, setAccessToken] = useState<string>('');
+  const [myAccountDomain, setMyAccountDomain] = useState<string>('');
+  const [testEndpoint, setTestEndpoint] = useState<string>('/me/v1/authentication-methods');
+  const [testMethod, setTestMethod] = useState<string>('GET');
+  const [testBody, setTestBody] = useState<string>('');
+  const [testResponse, setTestResponse] = useState<{
+    status?: number;
+    statusText?: string;
+    headers?: Record<string, string>;
+    body?: any;
+    error?: string;
+  }>({});
+  const [testLoading, setTestLoading] = useState(false);
+
   useEffect(() => {
     // Check token capabilities first
     checkTokenCapabilities();
+
+    // Fetch access token for testing
+    fetchAccessToken();
 
     // Attempt to fetch - if we get 401, we'll redirect to get My Account API token
     fetchEnrolledMethods();
     fetchAvailableFactors();
   }, []);
+
+  const fetchAccessToken = async () => {
+    try {
+      console.log('🔄 Requesting My Account API token via token exchange...');
+
+      // Call the on-demand token exchange endpoint
+      const response = await fetch('/api/mfa/auth/get-token', {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.accessToken) {
+          setAccessToken(data.accessToken);
+          // CRITICAL: Use custom domain to match token audience
+          // Token audience is https://login.authskye.org/me/ so API calls MUST use custom domain
+          setMyAccountDomain('https://login.authskye.org');
+          console.log('✅ My Account API token received:', {
+            audience: data.audience,
+            expiresIn: data.expiresIn,
+            scope: data.scope,
+          });
+
+          toast.success('My Account API token ready', {
+            description: 'You can now test My Account API endpoints',
+          });
+        } else {
+          console.error('❌ Token exchange response missing token:', data);
+          toast.error('Token exchange failed', {
+            description: data.message || 'Could not get My Account API token',
+          });
+        }
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Token exchange failed:', errorData);
+
+        toast.error('Token exchange not configured', {
+          description: errorData.message || 'Please configure CTE Action and credentials',
+        });
+      }
+    } catch (error) {
+      console.error('❌ Failed to fetch My Account API token:', error);
+      toast.error('Failed to get token', {
+        description: 'Check console for details',
+      });
+    }
+  };
 
   const checkTokenCapabilities = async () => {
     try {
@@ -392,6 +462,82 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
     }
   };
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success('Copied to clipboard');
+  };
+
+  const handleTestEndpoint = async () => {
+    setTestLoading(true);
+    setTestResponse({});
+
+    try {
+      // Validate JSON if body is provided
+      let parsedBody = null;
+      if (testMethod !== 'GET' && testBody) {
+        try {
+          parsedBody = JSON.parse(testBody);
+        } catch (e) {
+          setTestResponse({
+            error: 'Invalid JSON in request body',
+          });
+          setTestLoading(false);
+          return;
+        }
+      }
+
+      const fullUrl = `${myAccountDomain}${testEndpoint}`;
+
+      console.log('🧪 Testing My Account API via proxy:', {
+        url: fullUrl,
+        method: testMethod,
+        endpoint: testEndpoint,
+        hasBody: !!parsedBody,
+      });
+
+      // Call the proxy endpoint
+      const response = await fetch('/api/mfa/proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          method: testMethod,
+          endpoint: testEndpoint,
+          body: parsedBody,
+        }),
+      });
+
+      const data = await response.json();
+
+      console.log('🧪 My Account API Response:', data);
+
+      // The proxy returns the actual status in the body
+      setTestResponse({
+        status: data.status,
+        statusText: data.statusText,
+        headers: data.headers,
+        body: data.body,
+        error: data.error,
+      });
+    } catch (error: any) {
+      console.error('🧪 My Account API Error:', error);
+      setTestResponse({
+        error: error.message || 'Request failed',
+      });
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
+  const getStatusColor = (status?: number) => {
+    if (!status) return 'text-gray-600';
+    if (status >= 200 && status < 300) return 'text-green-600';
+    if (status >= 400 && status < 500) return 'text-orange-600';
+    if (status >= 500) return 'text-red-600';
+    return 'text-gray-600';
+  };
+
   return (
     <div className="space-y-6">
       {/* My Account API Token Status */}
@@ -482,6 +628,270 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* API Testing Interface */}
+      <Card className="border-purple-200 bg-purple-50">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <Terminal className="w-5 h-5 text-purple-600" />
+            <div className="flex-1">
+              <CardTitle className="text-purple-900">My Account API Tester</CardTitle>
+              <CardDescription className="text-purple-700">
+                Test Auth0 My Account API endpoints using your access token (via Next.js proxy)
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Auth0 Domain Display */}
+          <div className="space-y-2">
+            <Label className="text-purple-900">My Account API Domain</Label>
+            <div className="flex gap-2">
+              <Input
+                value={myAccountDomain}
+                readOnly
+                className="font-mono text-xs bg-white/50"
+                placeholder="Loading domain..."
+              />
+            </div>
+          </div>
+
+          {/* Access Token Display */}
+          <div className="space-y-2">
+            <Label className="text-purple-900">Access Token</Label>
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
+                <Input
+                  value={accessToken}
+                  readOnly
+                  className="font-mono text-xs bg-white/50 pr-20"
+                  placeholder="No token available"
+                />
+                {accessToken && (
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-purple-600">
+                    {accessToken.length} chars
+                  </span>
+                )}
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => copyToClipboard(accessToken)}
+                disabled={!accessToken}
+                className="border-purple-300 text-purple-700 hover:bg-purple-100"
+              >
+                <Copy className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={fetchAccessToken}
+                className="border-purple-300 text-purple-700 hover:bg-purple-100"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
+          <Separator className="bg-purple-200" />
+
+          {/* Request Configuration */}
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Method Selector */}
+              <div className="space-y-2">
+                <Label className="text-purple-900">Method</Label>
+                <Select value={testMethod} onValueChange={setTestMethod}>
+                  <SelectTrigger className="bg-white/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="GET">GET</SelectItem>
+                    <SelectItem value="POST">POST</SelectItem>
+                    <SelectItem value="PUT">PUT</SelectItem>
+                    <SelectItem value="PATCH">PATCH</SelectItem>
+                    <SelectItem value="DELETE">DELETE</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Endpoint Input */}
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-purple-900">Endpoint</Label>
+                <Select value={testEndpoint} onValueChange={setTestEndpoint}>
+                  <SelectTrigger className="bg-white/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="/me/v1/authentication-methods">Authentication Methods</SelectItem>
+                    <SelectItem value="/me/v1/factors">Available Factors</SelectItem>
+                    <SelectItem value="/me/v1/authentication-methods/{id}">Specific Method (replace {'{id}'})</SelectItem>
+                    <SelectItem value="/me/v1/connected-accounts">Connected Accounts</SelectItem>
+                    <SelectItem value="/me">Profile Info</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Custom Endpoint Input */}
+            <div className="space-y-2">
+              <Label className="text-purple-900 text-xs">Or enter custom endpoint path</Label>
+              <Input
+                value={testEndpoint}
+                onChange={(e) => setTestEndpoint(e.target.value)}
+                placeholder="/me/v1/authentication-methods/aut_abc123"
+                className="font-mono text-sm bg-white/50"
+              />
+              <p className="text-xs text-purple-700">
+                Full URL: <span className="font-mono">{myAccountDomain}{testEndpoint}</span>
+              </p>
+            </div>
+
+            {/* Request Body */}
+            {testMethod !== 'GET' && (
+              <div className="space-y-2">
+                <Label className="text-purple-900">Request Body (JSON)</Label>
+                <Textarea
+                  value={testBody}
+                  onChange={(e) => setTestBody(e.target.value)}
+                  placeholder='{\n  "type": "phone",\n  "phone_number": "+15551234567"\n}'
+                  className="font-mono text-sm bg-white/50 min-h-[120px]"
+                />
+                <p className="text-xs text-purple-700">
+                  See <a href="https://auth0.com/docs/manage-users/my-account-api" target="_blank" rel="noopener noreferrer" className="underline">My Account API docs</a> for request body schemas
+                </p>
+              </div>
+            )}
+
+            {/* Info Box */}
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800 space-y-2">
+              <div>
+                <strong>How it works:</strong> Calls through Next.js proxy (<code className="font-mono">/api/mfa/proxy</code>) to avoid CORS issues.
+              </div>
+              <div>
+                Proxy forwards to: <code className="font-mono bg-blue-100 px-1 rounded">{myAccountDomain}[endpoint]</code>
+              </div>
+              <div>
+                With header: <code className="font-mono bg-blue-100 px-1 rounded">Authorization: Bearer [your-token]</code>
+              </div>
+            </div>
+
+            {/* Quick Examples */}
+            <details className="text-xs">
+              <summary className="cursor-pointer text-purple-900 font-semibold hover:text-purple-700">
+                Quick Examples
+              </summary>
+              <div className="mt-2 space-y-2 pl-4 text-purple-800">
+                <div className="p-2 bg-white/50 rounded border border-purple-200">
+                  <div className="font-mono text-purple-900">GET /me/v1/authentication-methods</div>
+                  <div className="text-purple-700">List all enrolled MFA methods</div>
+                </div>
+                <div className="p-2 bg-white/50 rounded border border-purple-200">
+                  <div className="font-mono text-purple-900">POST /me/v1/authentication-methods</div>
+                  <div className="text-purple-700">Enroll new MFA method</div>
+                  <pre className="mt-1 text-xs bg-purple-100 p-1 rounded overflow-x-auto">
+{`{
+  "type": "phone",
+  "phone_number": "+15551234567"
+}`}</pre>
+                </div>
+                <div className="p-2 bg-white/50 rounded border border-purple-200">
+                  <div className="font-mono text-purple-900">DELETE /me/v1/authentication-methods/aut_abc123</div>
+                  <div className="text-purple-700">Remove specific MFA method</div>
+                </div>
+              </div>
+            </details>
+
+            {/* Send Button */}
+            <Button
+              onClick={handleTestEndpoint}
+              disabled={testLoading || !myAccountDomain}
+              className="w-full bg-purple-600 hover:bg-purple-700"
+            >
+              {testLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Testing...
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 mr-2" />
+                  Test My Account API
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Response Display */}
+          {(testResponse.status || testResponse.error) && (
+            <>
+              <Separator className="bg-purple-200" />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label className="text-purple-900">Response</Label>
+                    <div className="text-xs text-purple-700 font-mono">
+                      {testMethod} {myAccountDomain}{testEndpoint}
+                    </div>
+                  </div>
+                  {testResponse.status && (
+                    <Badge className={getStatusColor(testResponse.status)}>
+                      {testResponse.status} {testResponse.statusText}
+                    </Badge>
+                  )}
+                </div>
+
+                {testResponse.error && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800 space-y-2">
+                    <div>
+                      <strong>Error:</strong> {testResponse.error}
+                    </div>
+                  </div>
+                )}
+
+                {/* Request Body Sent */}
+                {testBody && testMethod !== 'GET' && (
+                  <div className="space-y-2">
+                    <span className="text-xs font-semibold text-purple-900">Request Body Sent</span>
+                    <pre className="p-3 bg-white/50 border border-purple-200 rounded text-xs overflow-auto max-h-[200px]">
+                      {testBody}
+                    </pre>
+                  </div>
+                )}
+
+                {testResponse.body && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-purple-900">Response Body</span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => copyToClipboard(JSON.stringify(testResponse.body, null, 2))}
+                        className="h-6 text-xs text-purple-600"
+                      >
+                        <Copy className="w-3 h-3 mr-1" />
+                        Copy
+                      </Button>
+                    </div>
+                    <pre className="p-3 bg-white/50 border border-purple-200 rounded text-xs overflow-auto max-h-[400px]">
+                      {JSON.stringify(testResponse.body, null, 2)}
+                    </pre>
+                  </div>
+                )}
+
+                {testResponse.headers && Object.keys(testResponse.headers).length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-xs font-semibold text-purple-900">Response Headers</span>
+                    <pre className="p-3 bg-white/50 border border-purple-200 rounded text-xs overflow-auto max-h-[200px]">
+                      {JSON.stringify(testResponse.headers, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Email Verification Section */}
       <Card>

@@ -46,7 +46,14 @@ npm run lint    # Run ESLint
 
 ### 1. Authentication & Authorization Flow
 
-All API routes follow this layered authorization pattern:
+**The application uses Pure FGA Authorization** - FGA is the single source of truth for all permission checks. No additional Firestore filters by `organizationId` are applied.
+
+**Supports Both Organization and Non-Organization Users:**
+- Organization users: Belong to an Auth0 Organization, have `user.org_id` in session
+- Non-organization users: Personal workspace, `user.org_id` is undefined
+- Both user types use identical FGA authorization patterns
+
+All API routes follow this authorization pattern:
 
 ```typescript
 import { withApiAuthRequired, getSession } from '@auth0/nextjs-auth0';
@@ -57,18 +64,12 @@ export const GET = withApiAuthRequired(async function GET(request) {
   const session = await getSession();
   const user = session?.user;
 
-  // Layer 2: User identity validation
-  if (!user?.sub || !user?.org_id) {
+  // Layer 2: User identity validation (org_id is OPTIONAL)
+  if (!user?.sub) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Layer 3: Role-based authorization (if applicable)
-  const roles = user['https://agency-inc-demo.com/roles'] || [];
-  if (!roles.includes('Admin')) {
-    return Response.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  // Layer 4: Resource-level authorization (FGA)
+  // Layer 3: Resource-level authorization (FGA) - SINGLE SOURCE OF TRUTH
   const canRead = await checkPermission(
     formatUserId(user.sub),
     'can_read',
@@ -78,15 +79,22 @@ export const GET = withApiAuthRequired(async function GET(request) {
     return Response.json({ error: 'Permission denied' }, { status: 403 });
   }
 
+  // Layer 4: Fetch from Firestore (NO organizationId filtering)
+  // FGA already authorized access - just fetch the data
+  const doc = await db.collection('documents').doc(resourceId).get();
+
   // Execute business logic
 });
 ```
 
 **Session Context Available:**
-- `user.sub` - User ID (e.g., "auth0|123456")
-- `user.org_id` - Organization ID
-- `user['https://agency-inc-demo.com/roles']` - Array of roles
+- `user.sub` - User ID (e.g., "auth0|123456") - **REQUIRED**
+- `user.org_id` - Organization ID - **OPTIONAL** (undefined for non-org users)
+- `user['https://agency-inc-demo.com/roles']` - Array of roles (org users only)
 - `user['https://agency-inc-demo.com/session_id']` - Current session ID
+
+**Key Principle:**
+The `organizationId` field in Firestore is **metadata only** - used for reporting and analytics, NOT for authorization. FGA tuples determine who can access what resources.
 
 ### 2. Input Validation Pattern
 
@@ -540,11 +548,27 @@ const tokenData = await tokenResponse.json();
 
 ### 9. My Account API for MFA Management
 
-The application uses **Auth0 My Account API** for user self-service MFA management. This allows users to enroll, view, and remove their own authentication methods without admin intervention.
+⚠️ **CURRENT STATUS: Implementation Complete - Requires Auth0 Configuration**
+
+The application has **Auth0 My Account API** implementation for user self-service MFA management using **Custom Token Exchange (CTE)** pattern (based on https://github.com/awhitmana0/a0-passkeyforms-demo).
+
+**Quick Start:**
+- 📋 Configuration: `docs/MY_ACCOUNT_AUTH0_SETUP_CHECKLIST.md` - Step-by-step Auth0 setup
+- 🧪 Testing: `docs/MY_ACCOUNT_QUICK_TEST.md` - 5-minute test guide
+- 🔍 Troubleshooting: `docs/MY_ACCOUNT_CTE_DIAGNOSTIC.md` - Detailed diagnostics
+- 📊 Comparison: `docs/MY_ACCOUNT_PASSKEY_COMPARISON.md` - Reference implementation comparison
 
 **Documentation:** https://auth0.com/docs/manage-users/my-account-api
 
 **Status:** Limited Early Access (requires activation in Auth0 Dashboard)
+
+**Known Issues (RESOLVED):**
+- ✅ **FIXED:** Custom Domain Issue - My Account API must use custom domain (`AUTH0_ISSUER_BASE_URL`) NOT canonical domain
+  - Token audience: `https://login.authskye.org/me/` (custom domain)
+  - API calls MUST use same domain: `https://login.authskye.org/me/authentication-methods`
+  - Using canonical domain (`archfaktor.us.auth0.com`) causes 404 errors because audience doesn't match
+- Client grant may not be properly configured
+- Needs verification that feature flags are enabled in tenant
 
 **Architecture:**
 ```
@@ -659,6 +683,10 @@ if (response.status === 403 && data.requiresStepUp) {
 
 **Important Notes:**
 - My Account API uses user access tokens, not M2M tokens
+- **CRITICAL:** When using custom domains, API calls MUST use `AUTH0_ISSUER_BASE_URL` (custom domain), NOT `AUTH0_MGMT_DOMAIN` (canonical domain)
+  - Token audience is set to custom domain: `https://login.authskye.org/me/`
+  - API endpoint must match: `${AUTH0_ISSUER_BASE_URL}/me/authentication-methods`
+  - Mismatch causes 404 errors (token audience doesn't match API domain)
 - Access tokens must have My Account API audience: `https://{domain}/me/`
 - Client Credentials Flow is NOT supported
 - Step-up authentication is enforced for all enrollment/removal operations
@@ -802,6 +830,50 @@ AUTH0_SCOPE='openid profile email offline_access read:me:authentication_methods 
 4. Restart server and test enrollment flow
 
 5. Follow `docs/mfa-implementation/MY_ACCOUNT_API_SETUP.md` for complete configuration steps
+
+**Custom Token Exchange (CTE) Implementation:**
+
+The application uses **on-demand token exchange** to obtain My Account API tokens, following the pattern from the Auth0 passkey forms demo.
+
+**How It Works:**
+```
+1. User visits Security tab
+   ↓
+2. Clicks "Get My Account API Token"
+   ↓
+3. Frontend calls POST /api/mfa/auth/get-token
+   ↓
+4. Backend performs OAuth2 Token Exchange:
+   POST https://login.authskye.org/oauth/token
+   {
+     grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+     client_id: CTE_CLIENT_ID,
+     client_secret: CTE_CLIENT_SECRET,
+     audience: "https://login.authskye.org/me/",
+     scope: "read:me:authentication_methods create:me:authentication_methods ...",
+     subject_token: user.sub,
+     subject_token_type: "urn:myaccount:cte"
+   }
+   ↓
+5. CTE Action validates request and sets audience
+   ↓
+6. Token returned to frontend, stored in state
+   ↓
+7. All MFA API calls include: Authorization: Bearer {token}
+```
+
+**Key Components:**
+- `src/app/api/mfa/auth/get-token/route.ts` - Token exchange endpoint
+- `auth0-actions/custom-token-exchange-basic.js` - CTE Action validator
+- Environment variables: `CTE_CLIENT_ID`, `CTE_CLIENT_SECRET`
+
+**Required Auth0 Configuration:**
+1. **Token Exchange Profile** - Links CTE Action to applications
+2. **CTE Action Deployed** - Validates token type `urn:myaccount:cte`
+3. **Token Exchange Grant** - Enabled on CTE M2M application
+4. **Applications Linked** - Frontend + CTE M2M in profile
+
+**Critical:** Token audience MUST match API domain (both use custom domain `login.authskye.org`)
 
 ### 10. Kong API Gateway Integration
 

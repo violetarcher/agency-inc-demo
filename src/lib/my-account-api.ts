@@ -20,43 +20,52 @@ import { getAccessToken } from '@auth0/nextjs-auth0';
 
 /**
  * My Account API Configuration
- * IMPORTANT: Must use custom domain (issuer base URL) NOT canonical domain
- * My Account API calls must match the token's issuer/audience domain
+ * IMPORTANT: Must use CUSTOM domain (issuer) to match token audience
+ * When using custom domains, tokens are issued with custom domain audience,
+ * so API calls MUST use the same custom domain to avoid 404 errors.
  */
-const myAccountDomain = process.env.AUTH0_ISSUER_BASE_URL!.replace('https://', '');
-const MY_ACCOUNT_API_AUDIENCE = `https://${myAccountDomain}/me/`;
-const MY_ACCOUNT_API_BASE_URL = `https://${myAccountDomain}/me`;
+const myAccountBaseUrl = process.env.AUTH0_ISSUER_BASE_URL!; // Custom domain: https://login.authskye.org
+const MY_ACCOUNT_API_AUDIENCE = `${myAccountBaseUrl}/me/`;
+const MY_ACCOUNT_API_BASE_URL = `${myAccountBaseUrl}/me/v1`; // Note: v1 API version
 
 /**
  * Authentication Method Types
- * Supported MFA factor types in Auth0
+ * Supported authentication method types in My Account API
  */
 export type AuthenticationMethodType =
+  | 'password'   // Username/password (primary authentication)
   | 'phone'      // SMS/Voice OTP
   | 'sms'        // SMS OTP (legacy)
   | 'email'      // Email OTP
   | 'totp'       // Time-based OTP (Authenticator apps)
-  | 'webauthn-roaming'    // Security keys (YubiKey, etc.)
-  | 'webauthn-platform'   // Platform authenticators (Face ID, Touch ID)
-  | 'push-notification';  // Push notifications (Guardian)
+  | 'push-notification'  // Push notifications (Guardian)
+  | 'webauthn-roaming'   // Hardware security keys (YubiKey)
+  | 'webauthn-platform'; // Platform authenticators (Face ID, Touch ID)
 
 /**
  * Authentication Method Interface
- * Represents an enrolled MFA factor
+ * Represents an enrolled MFA factor from My Account API
  */
 export interface AuthenticationMethod {
   id: string;
   type: AuthenticationMethodType;
-  name?: string;
-  confirmed: boolean;
   created_at: string;
+  confirmed?: boolean;
+  usage?: ('primary' | 'secondary')[];
   last_auth_at?: string;
-  phone_number?: string;
+
+  // Optional fields based on type
+  name?: string;
   email?: string;
-  authenticator_type?: string;
+  phone_number?: string;
+  preferred_authentication_method?: 'sms' | 'voice';
+  identity_user_id?: string;
+
+  // TOTP enrollment response
+  authenticator_type?: 'otp' | 'oob';
   totp_secret?: string;
+  barcode_uri?: string;
   recovery_codes?: string[];
-  preferred_authentication_method?: boolean;
 }
 
 /**
@@ -232,12 +241,15 @@ async function myAccountAPIRequest<T>(
  */
 export async function listAuthenticationMethods(): Promise<AuthenticationMethod[]> {
   try {
-    const methods = await myAccountAPIRequest<AuthenticationMethod[]>('/authentication-methods', {
+    const response = await myAccountAPIRequest<{ authentication_methods?: AuthenticationMethod[] }>('/authentication-methods', {
       method: 'GET',
     });
 
-    console.log('✅ Listed authentication methods:', methods?.length || 0);
-    return methods || [];
+    // My Account API returns: { authentication_methods: [...] }
+    const methods = response?.authentication_methods || [];
+
+    console.log('✅ Listed authentication methods:', methods.length);
+    return methods;
   } catch (error) {
     console.error('❌ Failed to list authentication methods:', error);
     throw error;
@@ -392,18 +404,6 @@ export async function getAvailableFactors(): Promise<MFAFactor[]> {
       enabled: true,
       name: 'Authenticator App',
       description: 'Use an authenticator app like Google Authenticator or Authy',
-    },
-    {
-      type: 'webauthn-roaming',
-      enabled: true,
-      name: 'Security Key',
-      description: 'Use a hardware security key like YubiKey',
-    },
-    {
-      type: 'webauthn-platform',
-      enabled: true,
-      name: 'Biometric',
-      description: 'Use Face ID, Touch ID, or Windows Hello',
     },
     {
       type: 'email',

@@ -35,11 +35,11 @@ export const GET = withApiAuthRequired(async function GET(request: NextRequest) 
 
     console.log('🧪 Testing My Account API call...');
     console.log('   User:', user.sub);
-    console.log('   Issuer:', process.env.AUTH0_ISSUER_BASE_URL);
+    console.log('   Custom Domain:', process.env.AUTH0_ISSUER_BASE_URL);
 
-    // Construct My Account API endpoint URL
-    const myAccountDomain = process.env.AUTH0_ISSUER_BASE_URL!.replace('https://', '');
-    const myAccountUrl = `https://${myAccountDomain}/me/authentication-methods`;
+    // Construct My Account API endpoint URL - use CUSTOM domain (must match token audience)
+    const myAccountBaseUrl = process.env.AUTH0_ISSUER_BASE_URL!;
+    const myAccountUrl = `${myAccountBaseUrl}/me/authentication-methods`;
 
     console.log('   Calling:', myAccountUrl);
 

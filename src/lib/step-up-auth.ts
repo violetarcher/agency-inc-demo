@@ -63,7 +63,7 @@ export async function hasCompletedMFA(): Promise<boolean> {
     const amr = payload.amr || [];
 
     // Check if MFA methods are present
-    const mfaMethods = ['mfa', 'otp', 'sms', 'totp', 'webauthn', 'push'];
+    const mfaMethods = ['mfa', 'otp', 'sms', 'totp', 'push'];
     const hasMFA = amr.some((method: string) =>
       mfaMethods.includes(method.toLowerCase())
     );

@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       accessToken,
       idToken: idToken || undefined,
+      domain: process.env.AUTH0_ISSUER_BASE_URL,
       expiresIn: 3600 // Auth0 tokens typically expire in 1 hour
     });
 

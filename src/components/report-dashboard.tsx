@@ -88,11 +88,11 @@ export function ReportDashboard({ permissions }: ReportDashboardProps) {
     });
 
     if (response.ok) {
-      toast.success(currentReport?.id ? "Medical Claim Updated" : "Medical Claim Created");
+      toast.success(currentReport?.id ? "Report Updated" : "Report Created");
       setIsDialogOpen(false);
       fetchReports();
     } else {
-      toast.error("Failed to save medical claim.");
+      toast.error("Failed to save report.");
     }
   };
 
@@ -130,12 +130,12 @@ export function ReportDashboard({ permissions }: ReportDashboardProps) {
   const performDelete = async (reportId: string, reportTitle: string) => {
   const response = await fetch(`/api/reports/${reportId}`, { method: 'DELETE' });
   if (response.ok) {
-    toast.success("Medical Claim Deleted", { description: `"${reportTitle}" has been deleted.` });
+    toast.success("Report Deleted", { description: `"${reportTitle}" has been deleted.` });
     fetchReports();
   } else {
     const error = await response.json();
     // Corrected to use error.error
-    toast.error("Failed to delete medical claim.", { description: error?.error || 'An unknown error occurred.'});
+    toast.error("Failed to delete report.", { description: error?.error || 'An unknown error occurred.'});
   }
 };
 
@@ -143,16 +143,16 @@ export function ReportDashboard({ permissions }: ReportDashboardProps) {
     <div>
       <div className="flex justify-end mb-4">
         {permissions.includes('create:reports') && (
-          <Button onClick={handleCreate}>Create Medical Claim</Button>
+          <Button onClick={handleCreate}>Create Report</Button>
         )}
       </div>
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Description</TableHead>
-              <TableHead>Claim Amount</TableHead>
-              <TableHead>Submitted By</TableHead>
+              <TableHead>Title</TableHead>
+              <TableHead>Amount</TableHead>
+              <TableHead>Author</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -179,18 +179,18 @@ export function ReportDashboard({ permissions }: ReportDashboardProps) {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{currentReport?.id ? 'Edit Medical Claim' : 'Create New Medical Claim'}</DialogTitle>
-            <DialogDescription>Fill in the details for the healthcare claim.</DialogDescription>
+            <DialogTitle>{currentReport?.id ? 'Edit Report' : 'Create New Report'}</DialogTitle>
+            <DialogDescription>Fill in the details for the expense report.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="title" className="text-right">Description</Label>
-                <Input id="title" name="title" defaultValue={currentReport?.title} className="col-span-3" required placeholder="e.g., Annual checkup, Lab work" />
+                <Label htmlFor="title" className="text-right">Title</Label>
+                <Input id="title" name="title" defaultValue={currentReport?.title} className="col-span-3" required />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="amount" className="text-right">Claim Amount</Label>
-                <Input id="amount" name="amount" type="number" defaultValue={currentReport?.amount} className="col-span-3" required placeholder="0.00" step="0.01" />
+                <Label htmlFor="amount" className="text-right">Amount</Label>
+                <Input id="amount" name="amount" type="number" defaultValue={currentReport?.amount} className="col-span-3" required />
               </div>
             </div>
             <DialogFooter>

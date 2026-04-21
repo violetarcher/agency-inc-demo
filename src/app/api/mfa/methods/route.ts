@@ -38,7 +38,7 @@ export const GET = withApiAuthRequired(async function GET(request: NextRequest) 
 
     // Construct My Account API endpoint URL
     const myAccountDomain = process.env.AUTH0_ISSUER_BASE_URL!.replace('https://', '');
-    const myAccountUrl = `https://${myAccountDomain}/me/authentication-methods`;
+    const myAccountUrl = `https://${myAccountDomain}/me/v1/authentication-methods`;
 
     // Call My Account API
     const response = await fetch(myAccountUrl, {
@@ -75,7 +75,10 @@ export const GET = withApiAuthRequired(async function GET(request: NextRequest) 
       );
     }
 
-    const methods = await response.json();
+    const data = await response.json();
+
+    // My Account API returns: { authentication_methods: [...] }
+    const methods = data.authentication_methods || data || [];
 
     return NextResponse.json({
       success: true,
@@ -187,7 +190,7 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
 
     // Construct My Account API endpoint URL
     const myAccountDomain = process.env.AUTH0_ISSUER_BASE_URL!.replace('https://', '');
-    const myAccountUrl = `https://${myAccountDomain}/me/authentication-methods`;
+    const myAccountUrl = `https://${myAccountDomain}/me/v1/authentication-methods`;
 
     console.log('📤 Calling My Account API:', myAccountUrl);
     console.log('📦 Request body:', enrollmentRequest);
@@ -284,7 +287,7 @@ export const DELETE = withApiAuthRequired(async function DELETE(request: NextReq
 
     // Construct My Account API endpoint URL
     const myAccountDomain = process.env.AUTH0_ISSUER_BASE_URL!.replace('https://', '');
-    const myAccountUrl = `https://${myAccountDomain}/me/authentication-methods`;
+    const myAccountUrl = `https://${myAccountDomain}/me/v1/authentication-methods`;
 
     // Get all methods first
     const getResponse = await fetch(myAccountUrl, {

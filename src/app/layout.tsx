@@ -11,6 +11,10 @@ export const metadata = {
   description: 'Secure Healthcare Management Platform',
 };
 
+export const viewport = {
+  themeColor: '#0a1d73',
+};
+
 export default function RootLayout({
   children,
 }: {

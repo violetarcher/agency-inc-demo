@@ -8,12 +8,31 @@ export const GET = handleAuth({
       const isStepUp = url.searchParams.get('stepup') === 'true';
       const hasInvitation = !!url.searchParams.get('invitation');
       const isAccessRequest = url.searchParams.get('access_request') === 'true';
+      const isMyAccount = url.searchParams.get('myaccount') === 'true';
 
+      // Base authorization parameters
       const authorizationParams: any = {
-        audience: process.env.AUTH0_AUDIENCE,
-        scope: 'openid profile email offline_access read:reports create:reports edit:reports delete:reports read:analytics',
         acr_values: 'urn:okta:loa:2fa:any'
       };
+
+      // Configure audience and scopes based on request type
+      if (isMyAccount) {
+        // My Account API request
+        // Audience must match the hostname being called (custom domain)
+        // But API calls will go to canonical domain
+        const myAccountAudience = `${process.env.AUTH0_ISSUER_BASE_URL}/me/`;
+
+        console.log('🔐 My Account API authentication requested');
+        console.log('   Audience (custom domain):', myAccountAudience);
+        console.log('   API calls will use canonical domain');
+
+        authorizationParams.audience = myAccountAudience;
+        authorizationParams.scope = 'openid profile email offline_access read:me:authentication_methods create:me:authentication_methods update:me:authentication_methods delete:me:authentication_methods';
+      } else {
+        // Regular login
+        authorizationParams.audience = process.env.AUTH0_AUDIENCE;
+        authorizationParams.scope = 'openid profile email offline_access read:reports create:reports edit:reports delete:reports read:analytics';
+      }
 
       const loginHint = url.searchParams.get('login_hint');
       if (loginHint) {
@@ -30,7 +49,7 @@ export const GET = handleAuth({
       if (isAccessRequest) {
         const requestedRole = url.searchParams.get('requested_role');
         const reason = url.searchParams.get('reason');
-        
+
         if (requestedRole) {
           authorizationParams.requested_role = requestedRole;
         }
@@ -49,8 +68,9 @@ export const GET = handleAuth({
       } else if (promptParam) {
         // Use explicit prompt parameter if provided (e.g., prompt=none for silent auth)
         authorizationParams.prompt = promptParam;
-      } else if (!hasInvitation && !isAccessRequest) {
-        // Add prompt=login for standard logins, but NOT for invitations or access requests
+      } else if (!hasInvitation && !isAccessRequest && !isMyAccount) {
+        // Add prompt=login for standard logins, but NOT for invitations, access requests, or My Account API
+        // For My Account API, omit prompt to allow Auth0 to handle consent/silent auth appropriately
         authorizationParams.prompt = 'login';
       }
 
@@ -58,17 +78,23 @@ export const GET = handleAuth({
       if (hasInvitation) {
         const invitation = url.searchParams.get('invitation');
         const organization = url.searchParams.get('organization');
-        
+
         if (invitation) {
           authorizationParams.invitation = invitation;
         }
         if (organization) {
           authorizationParams.organization = organization;
         }
-        
+
       }
-      
-      return await handleLogin(req, ctx, { authorizationParams });
+
+      // Get returnTo parameter for redirect after login
+      const returnTo = url.searchParams.get('returnTo');
+
+      return await handleLogin(req, ctx, {
+        authorizationParams,
+        returnTo: returnTo || undefined
+      });
     } catch (error: any) {
       console.error("Login Handler Error:", error);
       return Response.json(
