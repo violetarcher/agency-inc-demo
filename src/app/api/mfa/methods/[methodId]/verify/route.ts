@@ -10,17 +10,23 @@ interface RouteParams {
 /**
  * POST /api/mfa/methods/[methodId]/verify
  *
- * Verifies and completes enrollment of an authentication method (e.g., TOTP).
+ * Verifies and completes enrollment of an authentication method.
  *
- * Request Body:
+ * Request Body (OTP-based - SMS, Email, TOTP):
  * {
- *   code: string,          // 6-digit verification code from authenticator app
- *   auth_session?: string  // Optional session ID from enrollment response
+ *   code: string,          // 6-digit verification code
+ *   auth_session: string   // Session ID from enrollment response
+ * }
+ *
+ * Request Body (WebAuthn - Biometric):
+ * {
+ *   credential: object,    // PublicKeyCredential from navigator.credentials.create()
+ *   auth_session: string   // Session ID from enrollment response
  * }
  *
  * Returns:
  * - 200: Method verified and enrollment completed
- * - 400: Invalid code or verification failed
+ * - 400: Invalid code/credential or verification failed
  * - 401: Unauthorized
  * - 500: Server error
  */
@@ -52,18 +58,19 @@ export const POST = withApiAuthRequired(async function POST(
 
     const { methodId } = params;
     const body = await request.json();
-    const { code, auth_session } = body;
-
-    if (!code) {
-      return NextResponse.json(
-        { error: 'Validation error', message: 'Verification code is required' },
-        { status: 400 }
-      );
-    }
+    const { code, credential, auth_session } = body;
 
     if (!auth_session) {
       return NextResponse.json(
         { error: 'Validation error', message: 'auth_session is required' },
+        { status: 400 }
+      );
+    }
+
+    // Either code (for OTP) or credential (for WebAuthn) is required
+    if (!code && !credential) {
+      return NextResponse.json(
+        { error: 'Validation error', message: 'Either verification code or credential is required' },
         { status: 400 }
       );
     }
@@ -76,12 +83,20 @@ export const POST = withApiAuthRequired(async function POST(
 
     console.log('📤 Calling verification endpoint:', verifyUrl);
 
-    const verifyRequest = {
-      otp_code: code,
+    // Build verification request based on type
+    let verifyRequest: any = {
       auth_session: auth_session
     };
 
-    console.log('📦 Verification request:', verifyRequest);
+    if (code) {
+      // OTP-based verification (SMS, email, TOTP)
+      verifyRequest.otp_code = code;
+    } else if (credential) {
+      // WebAuthn credential verification
+      verifyRequest.credential = credential;
+    }
+
+    console.log('📦 Verification request:', { ...verifyRequest, credential: credential ? '[CREDENTIAL DATA]' : undefined });
 
     // Call My Account API verification endpoint
     const response = await fetch(verifyUrl, {

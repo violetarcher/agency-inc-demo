@@ -177,21 +177,34 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
     // Type-specific configuration
     switch (type) {
       case 'sms':
-      case 'phone':
+        // SMS is actually type 'phone' with preferred_authentication_method='sms'
         if (!phoneNumber) {
           return NextResponse.json(
             {
               error: 'Validation error',
-              message: 'Phone number required for SMS/phone enrollment',
+              message: 'Phone number required for SMS enrollment',
+            },
+            { status: 400 }
+          );
+        }
+        enrollmentRequest.type = 'phone';
+        enrollmentRequest.phone_number = phoneNumber;
+        enrollmentRequest.preferred_authentication_method = 'sms';
+        break;
+
+      case 'phone':
+        // Voice call
+        if (!phoneNumber) {
+          return NextResponse.json(
+            {
+              error: 'Validation error',
+              message: 'Phone number required for phone enrollment',
             },
             { status: 400 }
           );
         }
         enrollmentRequest.phone_number = phoneNumber;
-        // For phone type, can optionally set preferred_authentication_method
-        if (type === 'phone') {
-          enrollmentRequest.preferred_authentication_method = 'voice';
-        }
+        enrollmentRequest.preferred_authentication_method = 'voice';
         break;
 
       case 'email':
@@ -210,8 +223,9 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
 
       case 'webauthn-roaming':
       case 'webauthn-platform':
-        // WebAuthn requires browser API - backend just initiates
-        // Frontend will need to call navigator.credentials.create()
+        // WebAuthn requires browser API - backend just sends the type as-is
+        // Auth0 returns public_key_credential_creation_options in response
+        // No additional fields required per API documentation
         break;
 
       default:

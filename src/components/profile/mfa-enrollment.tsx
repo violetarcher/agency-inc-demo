@@ -85,6 +85,11 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
     manual_input_code: string;
     auth_session: string;
   } | null>(null);
+  const [otpEnrollment, setOtpEnrollment] = useState<{
+    id: string;
+    type: string;
+    auth_session: string;
+  } | null>(null);
   const [verificationCode, setVerificationCode] = useState('');
   const [tokenInfo, setTokenInfo] = useState<{
     hasToken: boolean;
@@ -114,8 +119,9 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
   const [testLoading, setTestLoading] = useState(false);
 
   useEffect(() => {
-    // Only fetch available factors on mount (doesn't need token)
+    // Fetch available factors and check token status on mount
     fetchAvailableFactors();
+    checkTokenCapabilities();
   }, []);
 
   const fetchAccessToken = async () => {
@@ -190,6 +196,17 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
             hasMyAccountScopes: hasScopes,
             needsReauth: !hasAudience || !hasScopes,
           });
+
+          // If token is valid, set it and fetch enrolled methods
+          if (hasAudience && hasScopes) {
+            setAccessToken(data.accessToken);
+            setMyAccountDomain(process.env.NEXT_PUBLIC_AUTH0_ISSUER_BASE_URL || 'https://login.authskye.org');
+
+            // Fetch enrolled methods automatically
+            await fetchEnrolledMethods();
+
+            console.log('✅ Token is valid, enrolled methods loaded');
+          }
         } else {
           setTokenInfo({
             hasToken: false,
@@ -209,8 +226,16 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
       const response = await fetch('/api/mfa/methods');
       if (response.ok) {
         const data = await response.json();
-        setEnrolledMethods(data.methods || []);
-        console.log('✅ Loaded enrolled methods:', data.methods?.length || 0);
+
+        // Filter out non-MFA authentication methods (e.g., email verification)
+        // Only include actual MFA types: phone (SMS), totp, webauthn, push-notification, email (OTP)
+        const mfaTypes = ['phone', 'totp', 'webauthn', 'webauthn-roaming', 'webauthn-platform', 'push-notification', 'email'];
+        const mfaMethods = (data.methods || []).filter((method: AuthenticationMethod) =>
+          mfaTypes.includes(method.type)
+        );
+
+        setEnrolledMethods(mfaMethods);
+        console.log('✅ Loaded enrolled MFA methods:', mfaMethods.length, '(filtered from', data.methods?.length || 0, 'total)');
       } else {
         console.error('❌ Failed to fetch enrolled methods:', response.status);
       }
@@ -231,6 +256,54 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
       }
     } catch (error) {
       console.error('❌ Error fetching available factors:', error);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otpEnrollment || !verificationCode) {
+      toast.error('Please enter verification code');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/mfa/methods/${otpEnrollment.id}/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+          code: verificationCode,
+          auth_session: otpEnrollment.auth_session,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success('Verified!', {
+          description: `${otpEnrollment.type === 'sms' ? 'SMS' : 'Email'} enrolled successfully.`,
+        });
+
+        // Refresh methods
+        await fetchEnrolledMethods();
+
+        // Close dialog
+        setOtpEnrollment(null);
+        setVerificationCode('');
+        setSelectedFactor(null);
+      } else {
+        toast.error('Verification Failed', {
+          description: data.message || 'Invalid code. Please try again.',
+        });
+      }
+    } catch (error) {
+      toast.error('Network Error', {
+        description: 'Failed to verify code.',
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -285,6 +358,12 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
   const handleEnrollFactor = async () => {
     if (!selectedFactor) return;
 
+    // WebAuthn requires special handling with browser credential API
+    if (selectedFactor.type === 'webauthn-roaming' || selectedFactor.type === 'webauthn-platform') {
+      await handleWebAuthnEnrollment(selectedFactor.type);
+      return;
+    }
+
     setLoading(true);
     try {
       const requestBody: any = {
@@ -326,7 +405,7 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
       const data = await response.json();
 
       if (response.ok || response.status === 202) {
-        // Check if verification is required (TOTP, etc.)
+        // Check if verification is required (TOTP, SMS, email, etc.)
         if (data.requiresVerification && data.method) {
           console.log('📋 Enrollment pending verification:', data.method);
 
@@ -339,11 +418,21 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
               auth_session: data.method.auth_session,
             });
             setVerificationCode('');
+            toast.success('Enrollment Initiated', {
+              description: `${selectedFactor.name} enrollment started. Scan the QR code.`,
+            });
+          } else {
+            // SMS/Email/etc - needs verification but no QR code
+            setOtpEnrollment({
+              id: data.method.id,
+              type: selectedFactor.type,
+              auth_session: data.method.auth_session,
+            });
+            setVerificationCode('');
+            toast.success('Verification Code Sent', {
+              description: `Check your ${selectedFactor.type === 'sms' ? 'phone' : 'email'} for a verification code.`,
+            });
           }
-
-          toast.success('Enrollment Initiated', {
-            description: `${selectedFactor.name} enrollment started. Scan the QR code.`,
-          });
 
           // Close enroll dialog
           setEnrollDialogOpen(false);
@@ -367,6 +456,162 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
       toast.error('Network Error', {
         description: 'Failed to connect to server. Please try again.',
       });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleWebAuthnEnrollment = async (type: string) => {
+    setLoading(true);
+    try {
+      // Check if WebAuthn is supported
+      if (!window.PublicKeyCredential) {
+        toast.error('Not Supported', {
+          description: 'WebAuthn is not supported in this browser.',
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Step 1: Initiate WebAuthn enrollment to get challenge from Auth0
+      toast.info('Initiating enrollment...', {
+        description: 'Contacting Auth0 to begin WebAuthn setup.',
+      });
+
+      const initiateResponse = await fetch('/api/mfa/methods', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ type }),
+      });
+
+      const initiateData = await initiateResponse.json();
+
+      if (!initiateResponse.ok) {
+        throw new Error(initiateData.message || 'Failed to initiate WebAuthn enrollment');
+      }
+
+      console.log('✅ WebAuthn challenge received:', initiateData);
+
+      // Step 2: Use browser's WebAuthn API to create credential
+      const { method } = initiateData;
+      const { authn_params_public_key } = method;
+
+      if (!authn_params_public_key) {
+        throw new Error('No WebAuthn challenge received from Auth0');
+      }
+
+      // Convert base64url challenge to ArrayBuffer
+      const challenge = Uint8Array.from(
+        atob(authn_params_public_key.challenge.replace(/-/g, '+').replace(/_/g, '/')),
+        c => c.charCodeAt(0)
+      );
+
+      // Convert user.id from base64url to ArrayBuffer
+      const userId = Uint8Array.from(
+        atob(authn_params_public_key.user.id.replace(/-/g, '+').replace(/_/g, '/')),
+        c => c.charCodeAt(0)
+      );
+
+      const publicKeyOptions: PublicKeyCredentialCreationOptions = {
+        challenge,
+        rp: authn_params_public_key.rp,
+        user: {
+          ...authn_params_public_key.user,
+          id: userId,
+        },
+        pubKeyCredParams: authn_params_public_key.pubKeyCredParams,
+        timeout: authn_params_public_key.timeout,
+        attestation: authn_params_public_key.attestation,
+        authenticatorSelection: authn_params_public_key.authenticatorSelection,
+      };
+
+      toast.info('Waiting for authenticator...', {
+        description: 'Please use your biometric sensor or security key.',
+      });
+
+      // Step 3: Create credential with browser API
+      const credential = await navigator.credentials.create({
+        publicKey: publicKeyOptions,
+      }) as PublicKeyCredential;
+
+      if (!credential) {
+        throw new Error('No credential returned from authenticator');
+      }
+
+      console.log('✅ Credential created:', credential);
+
+      // Step 4: Send credential response back to Auth0 via verify endpoint
+      const response = credential.response as AuthenticatorAttestationResponse;
+
+      // Convert ArrayBuffers to base64url
+      const arrayBufferToBase64Url = (buffer: ArrayBuffer) => {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      };
+
+      const credentialResponse = {
+        id: credential.id,
+        rawId: arrayBufferToBase64Url(credential.rawId),
+        type: credential.type,
+        response: {
+          attestationObject: arrayBufferToBase64Url(response.attestationObject),
+          clientDataJSON: arrayBufferToBase64Url(response.clientDataJSON),
+        },
+      };
+
+      toast.info('Completing enrollment...', {
+        description: 'Verifying your credential with Auth0.',
+      });
+
+      const verifyResponse = await fetch(`/api/mfa/methods/${method.id}/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+          credential: credentialResponse,
+          auth_session: method.auth_session,
+        }),
+      });
+
+      const verifyData = await verifyResponse.json();
+
+      if (verifyResponse.ok) {
+        toast.success('Biometric Enrolled!', {
+          description: 'Your biometric authentication has been successfully enrolled.',
+        });
+
+        // Refresh methods and close dialog
+        await fetchEnrolledMethods();
+        setEnrollDialogOpen(false);
+        setSelectedFactor(null);
+      } else {
+        throw new Error(verifyData.message || 'Failed to verify credential');
+      }
+    } catch (error: any) {
+      console.error('❌ WebAuthn enrollment failed:', error);
+
+      if (error.name === 'NotAllowedError') {
+        toast.error('Enrollment Cancelled', {
+          description: 'You cancelled the biometric enrollment.',
+        });
+      } else if (error.name === 'NotSupportedError') {
+        toast.error('Not Supported', {
+          description: 'This authenticator type is not supported on your device.',
+        });
+      } else {
+        toast.error('Enrollment Failed', {
+          description: error.message || 'Failed to enroll biometric authentication.',
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -523,6 +768,7 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
         return <Key className={iconClass} />;
       case 'email':
         return <Mail className={iconClass} />;
+      case 'webauthn':
       case 'webauthn-roaming':
       case 'webauthn-platform':
         return <Fingerprint className={iconClass} />;
@@ -1147,6 +1393,62 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
             </Button>
             <Button
               onClick={handleVerifyTotp}
+              disabled={loading || verificationCode.length !== 6}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                'Verify & Complete'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* SMS/Email OTP Verification Dialog */}
+      <Dialog open={!!otpEnrollment} onOpenChange={() => setOtpEnrollment(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enter Verification Code</DialogTitle>
+            <DialogDescription>
+              {otpEnrollment?.type === 'sms'
+                ? 'Enter the code sent to your phone via SMS'
+                : 'Enter the code sent to your email'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Verification Code Input */}
+            <div className="space-y-2">
+              <Label htmlFor="otp-code">6-digit code</Label>
+              <Input
+                id="otp-code"
+                placeholder="000000"
+                value={verificationCode}
+                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                maxLength={6}
+                className="text-center text-2xl font-mono tracking-widest"
+                autoFocus
+              />
+            </div>
+
+            {/* Instructions */}
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Didn't receive it?</strong> Check your spam folder or try enrolling again.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOtpEnrollment(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleVerifyOtp}
               disabled={loading || verificationCode.length !== 6}
             >
               {loading ? (

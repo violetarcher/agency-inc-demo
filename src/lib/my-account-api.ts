@@ -39,8 +39,9 @@ export type AuthenticationMethodType =
   | 'email'      // Email OTP
   | 'totp'       // Time-based OTP (Authenticator apps)
   | 'push-notification'  // Push notifications (Guardian)
-  | 'webauthn-roaming'   // Hardware security keys (YubiKey)
-  | 'webauthn-platform'; // Platform authenticators (Face ID, Touch ID)
+  | 'webauthn'   // WebAuthn (with authenticator_attachment: 'platform' or 'cross-platform')
+  | 'webauthn-roaming'   // Hardware security keys (YubiKey) - UI type, maps to webauthn
+  | 'webauthn-platform'; // Platform authenticators (Face ID, Touch ID) - UI type, maps to webauthn
 
 /**
  * Authentication Method Interface
@@ -88,6 +89,8 @@ export interface EnrollmentRequest {
   phone_number?: string;
   email?: string;
   authenticator_type?: 'otp' | 'oob';
+  authenticator_attachment?: 'platform' | 'cross-platform'; // For WebAuthn
+  preferred_authentication_method?: 'sms' | 'voice'; // For phone type
 }
 
 /**
@@ -389,51 +392,67 @@ export async function deleteAllAuthenticationMethods(): Promise<void> {
  */
 export async function getAvailableFactors(): Promise<MFAFactor[]> {
   // Note: My Account API /me/v1/factors endpoint returns 403
-  // Return static list of available factors based on tenant configuration
-  // User can enroll any of these through the My Account API
+  // Return list of factors that are commonly available
+  // Factors not enabled in the tenant will fail during enrollment with 400 error
 
-  return [
+  // Read from environment variable to control which factors to show
+  const enabledFactors = process.env.NEXT_PUBLIC_ENABLED_MFA_FACTORS?.split(',') || [
+    'sms',
+    'totp',
+    'email',
+  ];
+
+  const allFactors: MFAFactor[] = [
     {
       type: 'sms',
-      enabled: true,
+      enabled: enabledFactors.includes('sms'),
       name: 'SMS',
       description: 'Receive verification codes via text message',
     },
     {
       type: 'phone',
-      enabled: true,
+      enabled: enabledFactors.includes('phone'),
       name: 'Phone Call',
       description: 'Receive verification codes via voice call',
     },
     {
       type: 'totp',
-      enabled: true,
+      enabled: enabledFactors.includes('totp'),
       name: 'Authenticator App',
       description: 'Use an authenticator app like Google Authenticator or Authy',
     },
     {
       type: 'email',
-      enabled: true,
+      enabled: enabledFactors.includes('email'),
       name: 'Email',
       description: 'Receive verification codes via email',
     },
     {
       type: 'push-notification',
-      enabled: true,
+      enabled: enabledFactors.includes('push-notification'),
       name: 'Push Notification',
       description: 'Receive push notifications via Auth0 Guardian app',
     },
     {
+      type: 'passkey',
+      enabled: enabledFactors.includes('passkey'),
+      name: 'Passkey',
+      description: 'Use passkeys for passwordless authentication',
+    },
+    {
       type: 'webauthn-roaming',
-      enabled: true,
+      enabled: enabledFactors.includes('webauthn-roaming'),
       name: 'Security Key',
       description: 'Use a hardware security key like YubiKey or Titan',
     },
     {
       type: 'webauthn-platform',
-      enabled: true,
+      enabled: enabledFactors.includes('webauthn-platform'),
       name: 'Biometric',
       description: 'Use Face ID, Touch ID, or Windows Hello',
     },
   ];
+
+  // Only return enabled factors
+  return allFactors.filter(factor => factor.enabled);
 }
