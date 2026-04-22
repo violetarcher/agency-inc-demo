@@ -114,7 +114,15 @@ export const mfaMethodIdSchema = z.object({
 });
 
 export const enrollMfaFactorSchema = z.object({
-  type: z.enum(['sms', 'phone', 'email', 'totp'], {
+  type: z.enum([
+    'sms',
+    'phone',
+    'email',
+    'totp',
+    'push-notification',
+    'webauthn-roaming',
+    'webauthn-platform'
+  ], {
     errorMap: () => ({ message: 'Invalid MFA factor type' })
   }),
   phoneNumber: z.string().optional(),

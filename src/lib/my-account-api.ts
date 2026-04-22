@@ -388,9 +388,9 @@ export async function deleteAllAuthenticationMethods(): Promise<void> {
  * @returns Array of available MFA factors
  */
 export async function getAvailableFactors(): Promise<MFAFactor[]> {
-  // Note: The My Account API may have a /factors endpoint, but if not,
-  // we return a static list of commonly available factors
-  // This should be updated based on actual API capabilities
+  // Note: My Account API /me/v1/factors endpoint returns 403
+  // Return static list of available factors based on tenant configuration
+  // User can enroll any of these through the My Account API
 
   return [
     {
@@ -398,6 +398,12 @@ export async function getAvailableFactors(): Promise<MFAFactor[]> {
       enabled: true,
       name: 'SMS',
       description: 'Receive verification codes via text message',
+    },
+    {
+      type: 'phone',
+      enabled: true,
+      name: 'Phone Call',
+      description: 'Receive verification codes via voice call',
     },
     {
       type: 'totp',
@@ -410,6 +416,24 @@ export async function getAvailableFactors(): Promise<MFAFactor[]> {
       enabled: true,
       name: 'Email',
       description: 'Receive verification codes via email',
+    },
+    {
+      type: 'push-notification',
+      enabled: true,
+      name: 'Push Notification',
+      description: 'Receive push notifications via Auth0 Guardian app',
+    },
+    {
+      type: 'webauthn-roaming',
+      enabled: true,
+      name: 'Security Key',
+      description: 'Use a hardware security key like YubiKey or Titan',
+    },
+    {
+      type: 'webauthn-platform',
+      enabled: true,
+      name: 'Biometric',
+      description: 'Use Face ID, Touch ID, or Windows Hello',
     },
   ];
 }

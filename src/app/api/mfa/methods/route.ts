@@ -145,9 +145,13 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
 
     // Parse and validate request body
     const body = await request.json();
+
+    console.log('📥 Enrollment request body:', body);
+
     const validation = enrollMfaFactorSchema.safeParse(body);
 
     if (!validation.success) {
+      console.error('❌ Validation failed:', validation.error.errors);
       return NextResponse.json(
         {
           error: 'Validation error',
@@ -158,34 +162,66 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
       );
     }
 
-    const { type, phoneNumber } = validation.data;
+    const { type, phoneNumber, email, name } = validation.data;
 
     console.log('✨ Enrolling MFA factor via My Account API:', type, 'for user:', user.sub);
 
-    // Create enrollment request
+    // Create enrollment request based on factor type
     const enrollmentRequest: any = { type };
 
-    if (type === 'sms' || type === 'phone') {
-      if (!phoneNumber) {
+    // Add optional name if provided
+    if (name) {
+      enrollmentRequest.name = name;
+    }
+
+    // Type-specific configuration
+    switch (type) {
+      case 'sms':
+      case 'phone':
+        if (!phoneNumber) {
+          return NextResponse.json(
+            {
+              error: 'Validation error',
+              message: 'Phone number required for SMS/phone enrollment',
+            },
+            { status: 400 }
+          );
+        }
+        enrollmentRequest.phone_number = phoneNumber;
+        // For phone type, can optionally set preferred_authentication_method
+        if (type === 'phone') {
+          enrollmentRequest.preferred_authentication_method = 'voice';
+        }
+        break;
+
+      case 'email':
+        if (email) {
+          enrollmentRequest.email = email;
+        }
+        break;
+
+      case 'totp':
+        // TOTP enrollment - no additional fields needed
+        break;
+
+      case 'push-notification':
+        // Push notification (Guardian) - no additional config needed
+        break;
+
+      case 'webauthn-roaming':
+      case 'webauthn-platform':
+        // WebAuthn requires browser API - backend just initiates
+        // Frontend will need to call navigator.credentials.create()
+        break;
+
+      default:
         return NextResponse.json(
           {
-            error: 'Validation error',
-            message: 'Phone number required for SMS/phone enrollment',
+            error: 'Not supported',
+            message: `MFA type "${type}" not fully implemented yet.`,
           },
           { status: 400 }
         );
-      }
-      enrollmentRequest.phone_number = phoneNumber;
-    } else if (type === 'totp') {
-      enrollmentRequest.authenticator_type = 'otp';
-    } else {
-      return NextResponse.json(
-        {
-          error: 'Not supported',
-          message: `MFA type "${type}" not supported yet. Try SMS or TOTP.`,
-        },
-        { status: 400 }
-      );
     }
 
     // Construct My Account API endpoint URL
@@ -206,6 +242,7 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
     });
 
     console.log('📥 Response status:', response.status);
+    console.log('📥 Response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
@@ -223,14 +260,21 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
     }
 
     const method = await response.json();
+    console.log('✅ Enrollment response:', JSON.stringify(method, null, 2));
+
+    // Check for auth_session (indicates pending verification)
+    if (method.auth_session) {
+      console.log('⚠️ Enrollment pending - requires verification with auth_session:', method.auth_session);
+    }
 
     return NextResponse.json(
       {
         success: true,
-        message: 'MFA factor enrolled successfully',
+        message: method.auth_session ? 'Enrollment initiated - verification required' : 'MFA factor enrolled successfully',
         method,
+        requiresVerification: !!method.auth_session,
       },
-      { status: 201 }
+      { status: response.status }
     );
   } catch (error: any) {
     console.error('❌ Failed to enroll MFA factor:', error);

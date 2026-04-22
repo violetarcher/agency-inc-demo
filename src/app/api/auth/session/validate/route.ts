@@ -18,12 +18,12 @@ export async function GET(request: NextRequest) {
     const user = session.user;
     const sessionId = user['https://agency-inc-demo.com/session_id'];
 
-    console.log(`🔍 Session validation: sessionId=${sessionId}, userId=${user.sub}`);
-    
+    // console.log(`🔍 Session validation: sessionId=${sessionId}, userId=${user.sub}`);
+
     // Check if this session has been revoked via back-channel logout
     const isRevoked = sessionId && isSessionRevoked(sessionId);
-    console.log(`🔍 Session revoked check: sessionId=${sessionId}, isRevoked=${isRevoked}`);
-    
+    // console.log(`🔍 Session revoked check: sessionId=${sessionId}, isRevoked=${isRevoked}`);
+
     if (isRevoked) {
       console.log(`🚨 Session ${sessionId} is revoked, returning 401`);
       return Response.json(

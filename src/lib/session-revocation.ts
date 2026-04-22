@@ -15,11 +15,8 @@ function ensureFileExists() {
 function loadRevokedSessions(): Set<string> {
   try {
     ensureFileExists();
-    console.log(`📁 Loading revoked sessions from: ${REVOKED_SESSIONS_FILE}`);
     const data = fs.readFileSync(REVOKED_SESSIONS_FILE, 'utf-8');
-    console.log(`📁 Raw file content: ${data}`);
     const sessions = JSON.parse(data);
-    console.log(`📁 Parsed sessions:`, sessions);
     return new Set(sessions);
   } catch (error) {
     console.error(`❌ Error loading revoked sessions:`, error);
@@ -49,9 +46,7 @@ export function addRevokedSession(sessionId: string) {
 // Function to check if session is revoked
 export function isSessionRevoked(sessionId: string): boolean {
   const revokedSessions = loadRevokedSessions();
-  const isRevoked = revokedSessions.has(sessionId);
-  console.log(`🔍 Checking revoked session: ${sessionId} = ${isRevoked} (total revoked: ${revokedSessions.size})`);
-  return isRevoked;
+  return revokedSessions.has(sessionId);
 }
 
 // Function to remove session from revoked list (for cleanup)
