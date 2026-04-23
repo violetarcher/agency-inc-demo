@@ -58,7 +58,7 @@ export const POST = withApiAuthRequired(async function POST(
 
     const { methodId } = params;
     const body = await request.json();
-    const { code, credential, auth_session } = body;
+    const { code, credential, authn_response, auth_session } = body;
 
     if (!auth_session) {
       return NextResponse.json(
@@ -67,13 +67,8 @@ export const POST = withApiAuthRequired(async function POST(
       );
     }
 
-    // Either code (for OTP) or credential (for WebAuthn) is required
-    if (!code && !credential) {
-      return NextResponse.json(
-        { error: 'Validation error', message: 'Either verification code or credential is required' },
-        { status: 400 }
-      );
-    }
+    // Note: push-notification doesn't require code/credential - Guardian handles approval
+    // Only OTP, WebAuthn, and passkey need additional verification data
 
     console.log('✅ Verifying MFA method:', methodId, 'for user:', user.sub);
 
@@ -91,12 +86,19 @@ export const POST = withApiAuthRequired(async function POST(
     if (code) {
       // OTP-based verification (SMS, email, TOTP)
       verifyRequest.otp_code = code;
+    } else if (authn_response) {
+      // Passkey verification - Auth0 expects 'authn_response'
+      verifyRequest.authn_response = authn_response;
     } else if (credential) {
       // WebAuthn credential verification
       verifyRequest.credential = credential;
     }
 
-    console.log('📦 Verification request:', { ...verifyRequest, credential: credential ? '[CREDENTIAL DATA]' : undefined });
+    console.log('📦 Verification request:', {
+      ...verifyRequest,
+      credential: credential ? '[CREDENTIAL DATA]' : undefined,
+      authn_response: authn_response ? '[AUTHN RESPONSE DATA]' : undefined
+    });
 
     // Call My Account API verification endpoint
     const response = await fetch(verifyUrl, {

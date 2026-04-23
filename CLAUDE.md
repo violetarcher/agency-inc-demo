@@ -673,9 +673,63 @@ if (response.status === 403 && data.requiresStepUp) {
 - **SMS** - Text message verification codes
 - **Phone** - Voice call verification codes
 - **TOTP** - Time-based one-time passwords (Google Authenticator, Authy)
-- **WebAuthn (Roaming)** - Hardware security keys (YubiKey, etc.)
-- **WebAuthn (Platform)** - Platform authenticators (Face ID, Touch ID, Windows Hello)
+- **Passkey** - Cross-device and platform credentials using WebAuthn
 - **Email** - Email verification codes
+
+**Passkey Support:**
+The application has **full passkey support** via Auth0 My Account API. Passkeys are a **distinct type** from webauthn-platform and webauthn-roaming, providing phishing-resistant, passwordless authentication using biometrics or hardware security keys.
+
+**Important:** Passkeys use the `passkey` type (not `webauthn-platform` or `webauthn-roaming`). The `passkey` type is cross-device and platform-agnostic, supporting both biometric authenticators and hardware security keys.
+
+**⚠️ Local Development Limitation:**
+Passkey enrollment **does not work in local development** (ngrok/localhost) due to WebAuthn security constraints. The RP ID returned by Auth0 (`login.authskye.org`) must be a registrable domain suffix of the current domain, which cannot be satisfied when running on ngrok or localhost. Test passkeys by deploying to Vercel or another hosting platform where you can configure a domain under the custom domain. See `docs/PASSKEY_LOCAL_DEV_LIMITATION.md` for details.
+
+**Passkey Features:**
+- **Cross-device authentication**: Can sync via iCloud, Google Account, Microsoft Account
+- **Platform-agnostic**: Works on any device with WebAuthn support
+- **Biometric support**: Face ID, Touch ID, Windows Hello, Android biometrics
+- **Security key support**: YubiKey, Titan Key, Feitian keys
+- **Identity linkage**: Optional connection to social login providers
+
+**Enabling Passkeys:**
+Set the environment variable:
+```env
+NEXT_PUBLIC_ENABLED_MFA_FACTORS='sms,totp,email,passkey'
+```
+
+**Passkey Enrollment Flow:**
+1. User gets My Account API token via CTE
+2. User clicks "Passkey" card
+3. Frontend initiates enrollment: `POST /api/mfa/methods { type: 'passkey' }`
+4. Auth0 returns challenge: `authn_params_public_key`
+5. Browser prompts for authentication: `navigator.credentials.create()`
+6. User completes authentication (biometric, PIN, or security key)
+7. Frontend sends attestation: `POST /api/mfa/methods/{id}/verify`
+8. Auth0 verifies and enrolls passkey
+
+**API Request Format:**
+```json
+{
+  "type": "passkey",
+  "connection": "google-oauth2",  // Optional: link to identity provider
+  "identity_user_id": "123456"    // Optional: external identity ID
+}
+```
+
+**Security Benefits:**
+- Phishing-resistant (credentials bound to domain)
+- No shared secrets (private key never leaves device)
+- Replay-proof (unique signature per authentication)
+- Cross-device sync with platform providers
+
+**Browser Requirements:**
+- Chrome 67+, Firefox 60+, Safari 13+, Edge 18+
+- Device with biometric hardware OR hardware security key
+
+**Documentation:**
+- Full implementation guide: `docs/PASSKEY_IMPLEMENTATION.md`
+- API specification: https://auth0.com/docs/api/myaccount/authentication-methods/start-the-enrollment-of-a-supported-authentication-method
+- Reference implementation: https://github.com/awhitmana0/a0-passkeyforms-demo
 
 **Rate Limiting:**
 - 25 requests per second (tenant level)

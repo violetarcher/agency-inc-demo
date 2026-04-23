@@ -24,12 +24,13 @@ export const GET = withApiAuthRequired(async function GET(request: NextRequest) 
       );
     }
 
-    // Get access token with My Account API audience
-    const { accessToken } = await getAccessToken();
+    // Get access token from Authorization header (passed from frontend after token exchange)
+    const authHeader = request.headers.get('Authorization');
+    const accessToken = authHeader?.replace('Bearer ', '');
 
     if (!accessToken) {
       return NextResponse.json(
-        { error: 'No access token available', message: 'Please re-authenticate' },
+        { error: 'No access token available', message: 'Please provide My Account API token in Authorization header' },
         { status: 401 }
       );
     }
@@ -130,12 +131,13 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
       );
     }
 
-    // Get access token with My Account API audience
-    const { accessToken } = await getAccessToken();
+    // Get access token from Authorization header (passed from frontend after token exchange)
+    const authHeader = request.headers.get('Authorization');
+    const accessToken = authHeader?.replace('Bearer ', '');
 
     if (!accessToken) {
       return NextResponse.json(
-        { error: 'No access token available', message: 'Please re-authenticate' },
+        { error: 'No access token available', message: 'Please provide My Account API token in Authorization header' },
         { status: 401 }
       );
     }
@@ -162,7 +164,7 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
       );
     }
 
-    const { type, phoneNumber, email, name } = validation.data;
+    const { type, phoneNumber, email, name, connection, identity_user_id } = validation.data;
 
     console.log('✨ Enrolling MFA factor via My Account API:', type, 'for user:', user.sub);
 
@@ -219,14 +221,28 @@ export const POST = withApiAuthRequired(async function POST(request: NextRequest
 
       case 'push-notification':
         // Push notification (Guardian) - no additional config needed
+        // Auth0 will return enrollment URL/barcode for Guardian app
         break;
 
-      case 'webauthn-roaming':
-      case 'webauthn-platform':
-        // WebAuthn requires browser API - backend just sends the type as-is
-        // Auth0 returns public_key_credential_creation_options in response
-        // No additional fields required per API documentation
+      case 'passkey':
+        // Passkey enrollment - requires browser WebAuthn API
+        // Auth0 returns authn_params_public_key for credential creation
+        // Optional: connection and identity_user_id for identity linkage
+        if (connection) {
+          enrollmentRequest.connection = connection;
+        }
+        if (identity_user_id) {
+          enrollmentRequest.identity_user_id = identity_user_id;
+        }
         break;
+
+      // WebAuthn types temporarily disabled - not yet supported
+      // case 'webauthn-roaming':
+      // case 'webauthn-platform':
+      //   // WebAuthn requires browser API - backend just sends the type as-is
+      //   // Auth0 returns public_key_credential_creation_options in response
+      //   // No additional fields required per API documentation
+      //   break;
 
       default:
         return NextResponse.json(
@@ -328,12 +344,13 @@ export const DELETE = withApiAuthRequired(async function DELETE(request: NextReq
       );
     }
 
-    // Get access token with My Account API audience
-    const { accessToken } = await getAccessToken();
+    // Get access token from Authorization header (passed from frontend after token exchange)
+    const authHeader = request.headers.get('Authorization');
+    const accessToken = authHeader?.replace('Bearer ', '');
 
     if (!accessToken) {
       return NextResponse.json(
-        { error: 'No access token available', message: 'Please re-authenticate' },
+        { error: 'No access token available', message: 'Please provide My Account API token in Authorization header' },
         { status: 401 }
       );
     }

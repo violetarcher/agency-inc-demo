@@ -34,6 +34,7 @@ import {
   Copy,
   Send,
   Terminal,
+  CheckCircle2,
 } from 'lucide-react';
 import { hasMyAccountAudience, hasMyAccountScopes, getMyAccountAuthUrl } from '@/lib/my-account-token';
 import { Textarea } from '@/components/ui/textarea';
@@ -71,6 +72,7 @@ interface MFAEnrollmentProps {
 
 export function MFAEnrollment({ user }: MFAEnrollmentProps) {
   const [enrolledMethods, setEnrolledMethods] = useState<AuthenticationMethod[]>([]);
+  const [enrolledPasskeys, setEnrolledPasskeys] = useState<AuthenticationMethod[]>([]);
   const [availableFactors, setAvailableFactors] = useState<MFAFactor[]>([]);
   const [loading, setLoading] = useState(false);
   const [emailVerificationLoading, setEmailVerificationLoading] = useState(false);
@@ -83,6 +85,11 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
     id: string;
     barcode_uri: string;
     manual_input_code: string;
+    auth_session: string;
+  } | null>(null);
+  const [pushEnrollment, setPushEnrollment] = useState<{
+    id: string;
+    barcode_uri: string;
     auth_session: string;
   } | null>(null);
   const [otpEnrollment, setOtpEnrollment] = useState<{
@@ -117,11 +124,19 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
     error?: string;
   }>({});
   const [testLoading, setTestLoading] = useState(false);
+  const [enrolledMethodsError, setEnrolledMethodsError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Fetch available factors and check token status on mount
+    // Fetch available factors on mount
     fetchAvailableFactors();
-    checkTokenCapabilities();
+
+    // Check if we have a cached My Account API token
+    const cachedToken = localStorage.getItem('myAccountToken');
+    if (cachedToken) {
+      setAccessToken(cachedToken);
+      fetchEnrolledMethods();
+    }
+    // Don't auto-fetch - let user click button when they need MFA management
   }, []);
 
   const fetchAccessToken = async () => {
@@ -137,6 +152,9 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
         const data = await response.json();
         if (data.success && data.accessToken) {
           setAccessToken(data.accessToken);
+          // Save to localStorage
+          localStorage.setItem('myAccountToken', data.accessToken);
+
           // CRITICAL: Use custom domain to match token audience
           // Token audience is https://login.authskye.org/me/ so API calls MUST use custom domain
           setMyAccountDomain('https://login.authskye.org');
@@ -150,8 +168,8 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
             description: 'Loading your MFA methods...',
           });
 
-          // Now fetch enrolled methods
-          await fetchEnrolledMethods();
+          // Now fetch enrolled methods - pass token directly since state hasn't updated yet
+          await fetchEnrolledMethods(data.accessToken);
         } else {
           console.error('❌ Token exchange response missing token:', data);
           toast.error('Token exchange failed', {
@@ -221,25 +239,50 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
     }
   };
 
-  const fetchEnrolledMethods = async () => {
+  const fetchEnrolledMethods = async (token?: string) => {
     try {
-      const response = await fetch('/api/mfa/methods');
+      setEnrolledMethodsError(null); // Clear previous errors
+
+      // Use Management API instead of My Account API to avoid 500 errors
+      const response = await fetch('/api/mfa/methods-mgmt');
+
       if (response.ok) {
         const data = await response.json();
 
-        // Filter out non-MFA authentication methods (e.g., email verification)
-        // Only include actual MFA types: phone (SMS), totp, webauthn, push-notification, email (OTP)
-        const mfaTypes = ['phone', 'totp', 'webauthn', 'webauthn-roaming', 'webauthn-platform', 'push-notification', 'email'];
-        const mfaMethods = (data.methods || []).filter((method: AuthenticationMethod) =>
-          mfaTypes.includes(method.type)
+        const allMethods = data.methods || [];
+
+        // Separate passkeys from MFA
+        const passkeyTypes = ['passkey', 'webauthn', 'webauthn-roaming', 'webauthn-platform'];
+        const passkeys = allMethods.filter((method: AuthenticationMethod) =>
+          passkeyTypes.includes(method.type)
         );
 
+        // MFA methods - only include true MFA types
+        // Exclude: password, passkeys, and email verification (which doesn't have authenticator_type)
+        const mfaMethods = allMethods.filter((method: AuthenticationMethod) => {
+          // Only include phone (SMS), totp, push-notification, and email OTP (which has authenticator_type)
+          if (method.type === 'phone') return true;
+          if (method.type === 'totp') return true;
+          if (method.type === 'push-notification') return true;
+          // Only include email if it's MFA (has authenticator_type 'oob'), not primary email verification
+          if (method.type === 'email' && method.authenticator_type === 'oob') return true;
+          return false;
+        });
+
         setEnrolledMethods(mfaMethods);
-        console.log('✅ Loaded enrolled MFA methods:', mfaMethods.length, '(filtered from', data.methods?.length || 0, 'total)');
+        setEnrolledPasskeys(passkeys);
+        console.log('✅ Loaded authentication methods:', {
+          mfa: mfaMethods.length,
+          passkeys: passkeys.length,
+          total: allMethods.length
+        });
       } else {
-        console.error('❌ Failed to fetch enrolled methods:', response.status);
+        const errorData = await response.json().catch(() => ({}));
+        setEnrolledMethodsError(errorData.message || 'Failed to load enrolled methods');
+        console.error('❌ Failed to fetch enrolled methods:', response.status, errorData);
       }
     } catch (error) {
+      setEnrolledMethodsError('Network error loading methods');
       console.error('❌ Error fetching enrolled methods:', error);
     }
   };
@@ -286,13 +329,14 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
           description: `${otpEnrollment.type === 'sms' ? 'SMS' : 'Email'} enrolled successfully.`,
         });
 
-        // Refresh methods
-        await fetchEnrolledMethods();
-
         // Close dialog
         setOtpEnrollment(null);
         setVerificationCode('');
         setSelectedFactor(null);
+
+        // Wait a moment then refresh (Management API needs time to sync)
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await fetchEnrolledMethods();
       } else {
         toast.error('Verification Failed', {
           description: data.message || 'Invalid code. Please try again.',
@@ -301,6 +345,76 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
     } catch (error) {
       toast.error('Network Error', {
         description: 'Failed to verify code.',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGuardianPushEnrollment = async () => {
+    setLoading(true);
+    try {
+      // Create Guardian enrollment ticket via Management API
+      const response = await fetch('/api/mfa/guardian-ticket', {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        console.log('Guardian enrollment data:', JSON.stringify(data, null, 2));
+
+        setPushEnrollment({
+          id: data.enrollment_id,
+          barcode_uri: data.barcode_uri,
+          auth_session: '',
+        });
+
+        toast.success('Guardian Enrollment Ready', {
+          description: 'Scan the QR code with Auth0 Guardian app.',
+        });
+
+        setEnrollDialogOpen(false);
+      } else {
+        toast.error('Enrollment Failed', {
+          description: data.message || 'Failed to create Guardian enrollment ticket.',
+        });
+      }
+    } catch (error) {
+      toast.error('Error', {
+        description: 'Failed to initiate Guardian enrollment.',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyPush = async () => {
+    if (!pushEnrollment) {
+      toast.error('No push enrollment in progress');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // For Guardian push, approval in the app completes enrollment automatically
+      // Just refresh the list to see if it appears
+      toast.info('Checking enrollment...', {
+        description: 'Refreshing to see if enrollment completed.',
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+      await fetchEnrolledMethods();
+
+      setPushEnrollment(null);
+      setSelectedFactor(null);
+
+      toast.success('Done', {
+        description: 'If you completed enrollment in Guardian, it should appear above.',
+      });
+    } catch (error) {
+      toast.error('Error', {
+        description: 'Failed to check enrollment status.',
       });
     } finally {
       setLoading(false);
@@ -334,13 +448,14 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
           description: 'Authenticator app enrolled successfully.',
         });
 
-        // Refresh methods
-        await fetchEnrolledMethods();
-
         // Close dialog
         setTotpEnrollment(null);
         setVerificationCode('');
         setSelectedFactor(null);
+
+        // Wait a moment then refresh (Management API needs time to sync)
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await fetchEnrolledMethods();
       } else {
         toast.error('Verification Failed', {
           description: data.message || 'Invalid code. Please try again.',
@@ -358,7 +473,13 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
   const handleEnrollFactor = async () => {
     if (!selectedFactor) return;
 
-    // WebAuthn requires special handling with browser credential API
+    // Passkey requires special handling with browser credential API
+    if (selectedFactor.type === 'passkey') {
+      await handlePasskeyEnrollment();
+      return;
+    }
+
+    // WebAuthn (if enabled) requires special handling with browser credential API
     if (selectedFactor.type === 'webauthn-roaming' || selectedFactor.type === 'webauthn-platform') {
       await handleWebAuthnEnrollment(selectedFactor.type);
       return;
@@ -405,12 +526,12 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
       const data = await response.json();
 
       if (response.ok || response.status === 202) {
-        // Check if verification is required (TOTP, SMS, email, etc.)
+        // Check if verification is required (TOTP, SMS, email, push, etc.)
         if (data.requiresVerification && data.method) {
           console.log('📋 Enrollment pending verification:', data.method);
 
           // Store TOTP enrollment data to show QR code
-          if (data.method.barcode_uri) {
+          if (selectedFactor.type === 'totp' && data.method.barcode_uri) {
             setTotpEnrollment({
               id: data.method.id,
               barcode_uri: data.method.barcode_uri,
@@ -420,6 +541,17 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
             setVerificationCode('');
             toast.success('Enrollment Initiated', {
               description: `${selectedFactor.name} enrollment started. Scan the QR code.`,
+            });
+          } else if (selectedFactor.type === 'push-notification' && data.method.barcode_uri) {
+            // Push notification enrollment - scan QR code, then confirm with push
+            setPushEnrollment({
+              id: data.method.id,
+              barcode_uri: data.method.barcode_uri,
+              auth_session: data.method.auth_session,
+            });
+            setVerificationCode('');
+            toast.success('Enrollment Initiated', {
+              description: 'Scan the QR code with Auth0 Guardian app, then approve the push notification.',
             });
           } else {
             // SMS/Email/etc - needs verification but no QR code
@@ -456,6 +588,191 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
       toast.error('Network Error', {
         description: 'Failed to connect to server. Please try again.',
       });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasskeyEnrollment = async () => {
+    setLoading(true);
+    try {
+      // Check if WebAuthn is supported
+      if (!window.PublicKeyCredential) {
+        toast.error('Not Supported', {
+          description: 'Passkeys are not supported in this browser.',
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Step 1: Initiate passkey enrollment to get challenge from Auth0
+      toast.info('Initiating enrollment...', {
+        description: 'Contacting Auth0 to begin passkey setup.',
+      });
+
+      const initiateResponse = await fetch('/api/mfa/methods', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ type: 'passkey' }),
+      });
+
+      const initiateData = await initiateResponse.json();
+
+      if (!initiateResponse.ok) {
+        throw new Error(initiateData.message || 'Failed to initiate passkey enrollment');
+      }
+
+      console.log('✅ Passkey challenge received:', initiateData);
+
+      // Step 2: Use browser's WebAuthn API to create credential
+      const { method } = initiateData;
+
+      console.log('🔍 Method object:', method);
+      console.log('🔍 Method ID:', method?.id);
+      console.log('🔍 Auth session:', method?.auth_session);
+
+      const { authn_params_public_key } = method;
+
+      if (!authn_params_public_key) {
+        throw new Error('No passkey challenge received from Auth0');
+      }
+
+      // Convert base64url challenge to ArrayBuffer
+      const challenge = Uint8Array.from(
+        atob(authn_params_public_key.challenge.replace(/-/g, '+').replace(/_/g, '/')),
+        c => c.charCodeAt(0)
+      );
+
+      // Convert user.id from base64url to ArrayBuffer
+      const userId = Uint8Array.from(
+        atob(authn_params_public_key.user.id.replace(/-/g, '+').replace(/_/g, '/')),
+        c => c.charCodeAt(0)
+      );
+
+      // ALWAYS use Auth0's provided RP ID - don't override
+      // Auth0 validates both the RP ID and the origin
+      // Cross-Origin Authentication must be enabled in Auth0 Dashboard
+      const rpId = authn_params_public_key.rp.id;
+
+      console.log('🔐 WebAuthn RP ID:', {
+        auth0Provided: authn_params_public_key.rp.id,
+        currentOrigin: window.location.origin,
+        usingRpId: rpId,
+        note: 'If this fails, ensure "Allow Cross-Origin Authentication" is enabled in Auth0 Dashboard'
+      });
+
+      const publicKeyOptions: PublicKeyCredentialCreationOptions = {
+        challenge,
+        rp: {
+          name: authn_params_public_key.rp.name,
+          id: rpId, // Use current hostname for local dev, Auth0's RP ID for production
+        },
+        user: {
+          ...authn_params_public_key.user,
+          id: userId,
+        },
+        pubKeyCredParams: authn_params_public_key.pubKeyCredParams,
+        timeout: authn_params_public_key.timeout,
+        attestation: authn_params_public_key.attestation,
+        authenticatorSelection: authn_params_public_key.authenticatorSelection,
+      };
+
+      toast.info('Waiting for authenticator...', {
+        description: 'Please use your biometric sensor or security key.',
+      });
+
+      // Step 3: Create credential with browser API
+      const credential = await navigator.credentials.create({
+        publicKey: publicKeyOptions,
+      }) as PublicKeyCredential;
+
+      if (!credential) {
+        throw new Error('No credential returned from authenticator');
+      }
+
+      console.log('✅ Passkey credential created:', credential);
+
+      // Step 4: Send credential response back to Auth0 via verify endpoint
+      const response = credential.response as AuthenticatorAttestationResponse;
+
+      // Convert ArrayBuffers to base64url
+      const arrayBufferToBase64Url = (buffer: ArrayBuffer) => {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      };
+
+      const credentialResponse: any = {
+        id: credential.id,
+        rawId: arrayBufferToBase64Url(credential.rawId),
+        type: credential.type,
+        response: {
+          attestationObject: arrayBufferToBase64Url(response.attestationObject),
+          clientDataJSON: arrayBufferToBase64Url(response.clientDataJSON),
+        },
+      };
+
+      // Include transports if available
+      if (response.getTransports) {
+        credentialResponse.transports = response.getTransports();
+      }
+
+      console.log('📤 Credential response to send:', credentialResponse);
+
+      toast.info('Completing enrollment...', {
+        description: 'Verifying your passkey with Auth0.',
+      });
+
+      // For passkey enrollment verification, use 'passkey|new' as the method ID
+      // The actual ID is only generated after successful verification
+      const verifyResponse = await fetch(`/api/mfa/methods/passkey|new/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+          authn_response: credentialResponse,  // Auth0 expects 'authn_response', not 'credential'
+          auth_session: method.auth_session,
+        }),
+      });
+
+      const verifyData = await verifyResponse.json();
+
+      if (verifyResponse.ok) {
+        toast.success('Passkey Enrolled!', {
+          description: 'Your passkey has been successfully enrolled.',
+        });
+
+        // Refresh methods and close dialog
+        await fetchEnrolledMethods();
+        setEnrollDialogOpen(false);
+        setSelectedFactor(null);
+      } else {
+        throw new Error(verifyData.message || 'Failed to verify passkey');
+      }
+    } catch (error: any) {
+      console.error('❌ Passkey enrollment failed:', error);
+
+      if (error.name === 'NotAllowedError') {
+        toast.error('Enrollment Cancelled', {
+          description: 'You cancelled the passkey enrollment.',
+        });
+      } else if (error.name === 'NotSupportedError') {
+        toast.error('Not Supported', {
+          description: 'This authenticator type is not supported on your device.',
+        });
+      } else {
+        toast.error('Enrollment Failed', {
+          description: error.message || 'Failed to enroll passkey.',
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -515,9 +832,22 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
         c => c.charCodeAt(0)
       );
 
+      // Override RP ID to match current domain (fix for local development)
+      const currentDomain = window.location.hostname;
+      const rpId = currentDomain;
+
+      console.log('🔐 WebAuthn RP ID override:', {
+        auth0RpId: authn_params_public_key.rp.id,
+        overrideRpId: rpId,
+        currentDomain: currentDomain
+      });
+
       const publicKeyOptions: PublicKeyCredentialCreationOptions = {
         challenge,
-        rp: authn_params_public_key.rp,
+        rp: {
+          name: authn_params_public_key.rp.name,
+          id: rpId, // Override with current domain
+        },
         user: {
           ...authn_params_public_key.user,
           id: userId,
@@ -622,11 +952,8 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/mfa/methods/${methodToDelete.id}`, {
+      const response = await fetch(`/api/mfa/methods-mgmt/${methodToDelete.id}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
       });
 
       const data = await response.json();
@@ -636,10 +963,13 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
           description: 'The authentication method has been removed from your account.',
         });
 
-        // Refresh methods and close dialog
-        await fetchEnrolledMethods();
+        // Close dialog first
         setDeleteDialogOpen(false);
         setMethodToDelete(null);
+
+        // Wait a moment then refresh (Management API needs time to sync)
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await fetchEnrolledMethods();
       } else {
         toast.error('Removal Failed', {
           description: data.message || 'Failed to remove MFA method. Please try again.',
@@ -648,6 +978,49 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
     } catch (error) {
       toast.error('Network Error', {
         description: 'Failed to connect to server. Please try again.',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCleanupCorrupted = async () => {
+    const confirmed = window.confirm(
+      'This will remove corrupted MFA enrollments from the legacy system. This is safe and will allow you to enroll methods properly. Continue?'
+    );
+
+    if (!confirmed) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch('/api/mfa/diagnose', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'cleanup' }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success('Cleanup Successful', {
+          description: `Removed ${data.deletedItems?.length || 0} corrupted enrollment(s). Try enrolling again.`,
+        });
+
+        // Clear error and refresh
+        setEnrolledMethodsError(null);
+        if (accessToken) {
+          await fetchEnrolledMethods();
+        }
+      } else {
+        toast.error('Cleanup Failed', {
+          description: data.message || 'Failed to cleanup corrupted enrollments.',
+        });
+      }
+    } catch (error) {
+      toast.error('Network Error', {
+        description: 'Failed to connect to server.',
       });
     } finally {
       setLoading(false);
@@ -663,18 +1036,19 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
 
     setLoading(true);
     try {
-      const response = await fetch('/api/mfa/methods', {
-        method: 'DELETE',
+      const response = await fetch('/api/mfa/reset-all', {
+        method: 'POST',
       });
 
       const data = await response.json();
 
       if (response.ok) {
         toast.success('MFA Reset Complete', {
-          description: 'All authentication methods have been removed from your account.',
+          description: `Removed ${data.deletedCount || 0} authentication method(s).`,
         });
 
-        // Refresh methods
+        // Wait a moment then refresh (Management API needs time to sync)
+        await new Promise(resolve => setTimeout(resolve, 500));
         await fetchEnrolledMethods();
       } else {
         toast.error('Reset Failed', {
@@ -768,6 +1142,8 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
         return <Key className={iconClass} />;
       case 'email':
         return <Mail className={iconClass} />;
+      case 'passkey':
+        return <Fingerprint className={iconClass} />;
       case 'webauthn':
       case 'webauthn-roaming':
       case 'webauthn-platform':
@@ -866,180 +1242,69 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
   };
 
   return (
-    <div className="space-y-6">
-      {/* My Account API Token Status */}
-      {tokenInfo.needsReauth && (
-        <Card className="border-orange-200 bg-orange-50">
-          <CardHeader>
-            <div className="flex items-start gap-3">
-              <Info className="w-5 h-5 text-orange-600 mt-0.5" />
-              <div className="flex-1">
-                <CardTitle className="text-orange-900">Authentication Required</CardTitle>
-                <CardDescription className="text-orange-700 mt-1">
-                  To manage MFA methods, you need to re-authenticate with My Account API permissions.
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Token Status Details */}
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center justify-between p-2 rounded bg-white/50">
-                <span className="text-orange-800">Access Token</span>
-                <Badge variant={tokenInfo.hasToken ? 'default' : 'secondary'}>
-                  {tokenInfo.hasToken ? 'Present' : 'Missing'}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between p-2 rounded bg-white/50">
-                <span className="text-orange-800">My Account API Audience</span>
-                <Badge variant={tokenInfo.hasMyAccountAudience ? 'default' : 'secondary'}>
-                  {tokenInfo.hasMyAccountAudience ? 'Valid' : 'Missing'}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between p-2 rounded bg-white/50">
-                <span className="text-orange-800">My Account API Scopes</span>
-                <Badge variant={tokenInfo.hasMyAccountScopes ? 'default' : 'secondary'}>
-                  {tokenInfo.hasMyAccountScopes ? 'Valid' : 'Missing'}
-                </Badge>
-              </div>
-            </div>
-
-            <Separator className="bg-orange-200" />
-
-            {/* Re-authenticate Button */}
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-orange-700">
-                  Click below to authenticate with My Account API permissions
-                </div>
-                <Button
-                  onClick={() => {
-                    const authUrl = getMyAccountAuthUrl('/profile?tab=security');
-                    console.log('🔄 Redirecting to My Account API auth:', authUrl);
-                    window.location.href = authUrl;
-                  }}
-                  className="bg-orange-600 hover:bg-orange-700"
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Re-authenticate
-                </Button>
-              </div>
-
-              {/* Test My Account API Button */}
-              {tokenInfo.hasToken && (
-                <div className="flex items-center justify-between pt-2 border-t border-orange-200">
-                  <div className="text-sm text-orange-700">
-                    Test My Account API integration
-                  </div>
-                  <Button
-                    onClick={handleTestMyAccountAPI}
-                    disabled={loading}
-                    variant="outline"
-                    className="border-orange-300 text-orange-700 hover:bg-orange-100"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Testing...
-                      </>
-                    ) : (
-                      <>
-                        <Shield className="w-4 h-4 mr-2" />
-                        Test API
-                      </>
-                    )}
-                  </Button>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Token Exchange Panel */}
+    <div className="max-w-4xl mx-auto space-y-4">
+      {/* MFA Management Token */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Key className="w-5 h-5" />
-            Token Exchange
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Key className="w-4 h-4" />
+            MFA Management Token
           </CardTitle>
-          <CardDescription>
-            Exchange tokens for different API audiences
-          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* My Account API Token */}
-            <Button
-              onClick={fetchAccessToken}
-              disabled={loading || !!accessToken}
-              className="w-full"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Getting Token...
-                </>
-              ) : accessToken ? (
-                <>
-                  <Check className="w-4 h-4 mr-2" />
-                  My Account API Token Ready
-                </>
-              ) : (
-                <>
-                  <Key className="w-4 h-4 mr-2" />
-                  Get My Account API Token
-                </>
-              )}
-            </Button>
-
-            {/* Standard API Token (placeholder for future) */}
-            <Button
-              variant="outline"
-              disabled
-              className="w-full"
-            >
-              <Key className="w-4 h-4 mr-2" />
-              Get Standard API Token
-              <Badge variant="secondary" className="ml-2">Coming Soon</Badge>
-            </Button>
+        <CardContent className="pt-0 space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">My Account API</span>
+            <Badge variant={accessToken ? "default" : "secondary"} className="h-5 text-xs">
+              {accessToken ? "Active" : "Not loaded"}
+            </Badge>
           </div>
-
-          {accessToken && (
-            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-sm text-green-800">
-                ✓ Token active - You can now manage MFA methods below
-              </p>
-            </div>
-          )}
+          <Button
+            onClick={() => {
+              localStorage.removeItem('myAccountToken');
+              setAccessToken('');
+              fetchAccessToken();
+            }}
+            disabled={loading}
+            className="w-full"
+            size="sm"
+            variant={accessToken ? "outline" : "default"}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Getting Token...
+              </>
+            ) : accessToken ? (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh Token
+              </>
+            ) : (
+              <>
+                <Key className="w-4 h-4 mr-2" />
+                Get Token
+              </>
+            )}
+          </Button>
         </CardContent>
       </Card>
-      {/* Email Verification Section */}
+
+      {/* Email Verification */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Mail className="w-5 h-5" />
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Mail className="w-4 h-4" />
             Email Verification
           </CardTitle>
-          <CardDescription>
-            Verify your email address to secure your account
-          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
-            <div className="flex items-center gap-3">
-              <Mail
-                className={`w-5 h-5 ${user?.email_verified ? 'text-green-600' : 'text-blue-600'}`}
-              />
-              <div>
-                <p className="font-medium">
-                  {user?.email_verified ? 'Email Verified' : 'Email Not Verified'}
-                </p>
-                <p className="text-sm text-muted-foreground">{user?.email || 'No email set'}</p>
-              </div>
+        <CardContent className="pt-0">
+          <div className="flex items-center justify-between p-2 border rounded">
+            <div className="flex items-center gap-2">
+              <Mail className={`w-4 h-4 ${user?.email_verified ? 'text-green-600' : 'text-orange-600'}`} />
+              <span className="text-sm font-medium">{user?.email || 'No email'}</span>
             </div>
             {user?.email_verified ? (
-              <Badge variant="default" className="bg-green-600">
+              <Badge variant="default" className="bg-green-600 h-6">
                 <Check className="w-3 h-3 mr-1" />
                 Verified
               </Badge>
@@ -1048,222 +1313,259 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
                 onClick={handleSendEmailVerification}
                 disabled={emailVerificationLoading}
                 size="sm"
+                variant="outline"
               >
-                {emailVerificationLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  'Send Verification Email'
-                )}
+                {emailVerificationLoading ? 'Sending...' : 'Verify'}
               </Button>
             )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Multi-Factor Authentication Section */}
+      {/* Passkeys */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="w-5 h-5" />
-                Multi-Factor Authentication
-              </CardTitle>
-              <CardDescription>
-                Manage your MFA methods for enhanced account security
-              </CardDescription>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Fingerprint className="w-4 h-4" />
+              Passkeys
+            </CardTitle>
+            {availableFactors.filter(f => f.type === 'passkey').map((factor) => (
+              <Dialog
+                key={factor.type}
+                open={enrollDialogOpen && selectedFactor?.type === factor.type}
+                onOpenChange={(open) => {
+                  setEnrollDialogOpen(open);
+                  if (!open) setSelectedFactor(null);
+                }}
+              >
+                <DialogTrigger asChild>
+                  <Button
+                    onClick={() => setSelectedFactor(factor)}
+                    disabled={loading}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Enroll Passkey</DialogTitle>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setEnrollDialogOpen(false)} disabled={loading}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleEnrollFactor} disabled={loading}>
+                      {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                      Enroll
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            ))}
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {enrolledPasskeys.length > 0 ? (
+            <div className="space-y-2">
+              {enrolledPasskeys.map((method) => (
+                <div
+                  key={method.id}
+                  className="flex items-center justify-between p-2 border rounded hover:bg-muted/30"
+                >
+                  <div className="flex items-center gap-2">
+                    <Fingerprint className="w-4 h-4 text-blue-600" />
+                    <span className="text-sm font-medium">{method.name || 'Passkey'}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {method.confirmed && <Badge variant="default" className="bg-blue-600 h-5 text-xs">Active</Badge>}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => {
+                        setMethodToDelete(method);
+                        setDeleteDialogOpen(true);
+                      }}
+                      disabled={loading}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
-            {enrolledMethods.length > 0 && (
+          ) : (
+            <p className="text-sm text-muted-foreground">No passkeys enrolled</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* MFA */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Shield className="w-4 h-4" />
+              Multi-Factor Authentication
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => fetchEnrolledMethods()}
+                disabled={loading}
+                className="h-8"
+              >
+                <RefreshCw className="w-3 h-3 mr-1" />
+                Refresh
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleResetAllMFA}
                 disabled={loading}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                className="text-red-600 hover:text-red-700 h-8"
               >
-                <AlertTriangle className="w-4 h-4 mr-2" />
-                Reset All MFA
+                <AlertTriangle className="w-3 h-3 mr-1" />
+                Reset MFA
               </Button>
-            )}
+            </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Enrolled Methods Section */}
-          {enrolledMethods.length > 0 ? (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-sm font-semibold mb-3">Enrolled Methods</h3>
-                <div className="space-y-2">
-                  {enrolledMethods.map((method) => (
-                    <div
-                      key={method.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="text-green-600">{getFactorIcon(method.type)}</div>
-                        <div>
-                          <p className="font-medium">
-                            {method.name || method.type.toUpperCase()}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Enrolled on {formatDate(method.created_at)}
-                            {method.phone_number && ` • ${method.phone_number}`}
-                            {method.email && ` • ${method.email}`}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant={method.confirmed ? 'default' : 'secondary'}
-                          className={method.confirmed ? 'bg-green-600' : ''}
-                        >
-                          {method.confirmed ? (
-                            <>
-                              <Check className="w-3 h-3 mr-1" />
-                              Active
-                            </>
-                          ) : (
-                            'Pending'
-                          )}
-                        </Badge>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setMethodToDelete(method);
-                            setDeleteDialogOpen(true);
-                          }}
-                          disabled={loading}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+        <CardContent className="pt-0 space-y-3">
+          {/* Enrolled MFA */}
+          {enrolledMethods.length > 0 && (
+            <div className="space-y-2">
+              {enrolledMethods.map((method) => (
+                <div
+                  key={method.id}
+                  className="flex items-center justify-between p-2 border rounded hover:bg-muted/30"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="text-green-600">{getFactorIcon(method.type)}</div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{method.name || method.type.toUpperCase()}</span>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        {method.phone_number && (
+                          <span>{method.phone_number}</span>
+                        )}
+                        {method.email && (
+                          <span>{method.email}</span>
+                        )}
+                        {method.type === 'totp' && !method.name && (
+                          <span>Authenticator App</span>
+                        )}
+                        {method.type === 'push-notification' && (
+                          <span>Guardian Push</span>
+                        )}
+                        {method.id && (
+                          <span className="text-xs text-muted-foreground/60">• ID: {method.id.split('|')[1]?.slice(0, 8) || method.id.slice(0, 8)}</span>
+                        )}
                       </div>
                     </div>
-                  ))}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {method.confirmed && <Badge variant="default" className="bg-green-600 h-5 text-xs">Active</Badge>}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => {
+                        setMethodToDelete(method);
+                        setDeleteDialogOpen(true);
+                      }}
+                      disabled={loading}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              <Separator />
-            </div>
-          ) : (
-            <div className="text-center py-8 border border-dashed rounded-lg">
-              <Shield className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-              <p className="text-sm text-muted-foreground">
-                No MFA methods enrolled yet. Add a method to secure your account.
-              </p>
+              ))}
             </div>
           )}
 
-          {/* Add New Method Section */}
-          <div>
-            <h3 className="text-sm font-semibold mb-3">Available Authentication Methods</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {availableFactors.map((factor) => (
-                <Dialog
-                  key={factor.type}
-                  open={enrollDialogOpen && selectedFactor?.type === factor.type}
-                  onOpenChange={(open) => {
-                    setEnrollDialogOpen(open);
-                    if (!open) {
-                      setSelectedFactor(null);
-                      setEnrollmentData({ phoneNumber: '', email: '' });
-                    }
-                  }}
-                >
-                  <DialogTrigger asChild>
-                    <button
-                      onClick={() => setSelectedFactor(factor)}
-                      disabled={loading}
-                      className="flex items-center gap-3 p-4 border rounded-lg hover:bg-muted/30 transition-colors text-left w-full"
-                    >
-                      {getFactorIcon(factor.type)}
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">{factor.name}</p>
-                        <p className="text-xs text-muted-foreground">{factor.description}</p>
-                      </div>
-                      <Plus className="w-5 h-5 text-muted-foreground" />
-                    </button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center gap-2">
-                        {getFactorIcon(factor.type)}
-                        Enroll {factor.name}
-                      </DialogTitle>
-                      <DialogDescription>{factor.description}</DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-4">
-                      {/* Phone Number Input for SMS */}
-                      {(factor.type === 'sms' || factor.type === 'phone') && (
-                        <div className="space-y-2">
-                          <Label htmlFor="phone">Phone Number</Label>
-                          <Input
-                            id="phone"
-                            type="tel"
-                            placeholder="+1 (555) 123-4567"
-                            value={enrollmentData.phoneNumber}
-                            onChange={(e) =>
-                              setEnrollmentData({ ...enrollmentData, phoneNumber: e.target.value })
-                            }
-                          />
-                        </div>
-                      )}
-
-                      {/* Email Input for Email */}
-                      {factor.type === 'email' && (
-                        <div className="space-y-2">
-                          <Label htmlFor="email">Email Address</Label>
-                          <Input
-                            id="email"
-                            type="email"
-                            placeholder="you@example.com"
-                            value={enrollmentData.email}
-                            onChange={(e) =>
-                              setEnrollmentData({ ...enrollmentData, email: e.target.value })
-                            }
-                          />
-                        </div>
-                      )}
-
-                      {/* Info Box */}
-                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-sm text-blue-800">
-                          <strong>Note:</strong> You can enroll multiple authentication methods
-                          to secure your account.
-                        </p>
-                      </div>
+          {/* Add MFA */}
+          <div className="grid grid-cols-2 gap-2">
+              {availableFactors
+                .filter(factor => factor.type !== 'passkey')
+                .map((factor) => (
+              <Dialog
+                key={factor.type}
+                open={enrollDialogOpen && selectedFactor?.type === factor.type}
+                onOpenChange={(open) => {
+                  setEnrollDialogOpen(open);
+                  if (!open) {
+                    setSelectedFactor(null);
+                    setEnrollmentData({ phoneNumber: '', email: '' });
+                  }
+                }}
+              >
+                <DialogTrigger asChild>
+                  <button
+                    onClick={() => setSelectedFactor(factor)}
+                    disabled={loading}
+                    className="flex items-center gap-2 p-2 border rounded hover:bg-muted/30 text-left"
+                  >
+                    {getFactorIcon(factor.type)}
+                    <span className="text-sm font-medium">{factor.name}</span>
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Enroll {factor.name}</DialogTitle>
+                  </DialogHeader>
+                  {(factor.type === 'sms' || factor.type === 'phone') && (
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone Number</Label>
+                      <Input
+                        id="phone"
+                        type="tel"
+                        placeholder="+1 (555) 123-4567"
+                        value={enrollmentData.phoneNumber}
+                        onChange={(e) =>
+                          setEnrollmentData({ ...enrollmentData, phoneNumber: e.target.value })
+                        }
+                      />
                     </div>
-
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setEnrollDialogOpen(false);
-                          setSelectedFactor(null);
-                          setEnrollmentData({ phoneNumber: '', email: '' });
-                        }}
-                        disabled={loading}
-                      >
-                        Cancel
-                      </Button>
-                      <Button onClick={handleEnrollFactor} disabled={loading}>
-                        {loading ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Enrolling...
-                          </>
-                        ) : (
-                          'Enroll Method'
-                        )}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              ))}
-            </div>
+                  )}
+                  {factor.type === 'email' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={enrollmentData.email}
+                        onChange={(e) =>
+                          setEnrollmentData({ ...enrollmentData, email: e.target.value })
+                        }
+                      />
+                    </div>
+                  )}
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setEnrollDialogOpen(false);
+                        setSelectedFactor(null);
+                        setEnrollmentData({ phoneNumber: '', email: '' });
+                      }}
+                      disabled={loading}
+                    >
+                      Cancel
+                    </Button>
+                    <Button onClick={handleEnrollFactor} disabled={loading}>
+                      {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                      Enroll
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -1403,6 +1705,65 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
               ) : (
                 'Verify & Complete'
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Push Notification QR Code Dialog */}
+      <Dialog open={!!pushEnrollment} onOpenChange={() => setPushEnrollment(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enroll Guardian Push</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* QR Code */}
+            <div className="flex justify-center p-4 bg-white rounded-lg">
+              {pushEnrollment && (
+                <QRCodeSVG
+                  value={pushEnrollment.barcode_uri}
+                  size={200}
+                  level="M"
+                />
+              )}
+            </div>
+
+            {/* Instructions */}
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Steps:</strong>
+              </p>
+              <ol className="text-sm text-blue-800 mt-2 ml-4 list-decimal space-y-1">
+                <li>Download Auth0 Guardian app from App Store or Google Play</li>
+                <li>Scan this QR code with the Guardian app</li>
+                <li>Approve the test push notification in Guardian</li>
+                <li>Wait for "Successfully enrolled!" message in Guardian app</li>
+                <li>Click "Done" below</li>
+              </ol>
+            </div>
+
+            {/* Success note */}
+            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-800">
+                <strong>Note:</strong> Once you approve in Guardian, enrollment completes automatically.
+                You'll be able to use Guardian push at your next login.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                setPushEnrollment(null);
+                toast.success('Enrollment Complete', {
+                  description: 'Guardian push will be available at your next login.',
+                });
+              }}
+              className="w-full"
+            >
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+              Done
             </Button>
           </DialogFooter>
         </DialogContent>

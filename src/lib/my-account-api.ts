@@ -39,9 +39,10 @@ export type AuthenticationMethodType =
   | 'email'      // Email OTP
   | 'totp'       // Time-based OTP (Authenticator apps)
   | 'push-notification'  // Push notifications (Guardian)
-  | 'webauthn'   // WebAuthn (with authenticator_attachment: 'platform' or 'cross-platform')
-  | 'webauthn-roaming'   // Hardware security keys (YubiKey) - UI type, maps to webauthn
-  | 'webauthn-platform'; // Platform authenticators (Face ID, Touch ID) - UI type, maps to webauthn
+  | 'passkey'    // Passkeys (cross-device and platform credentials)
+  | 'webauthn'   // WebAuthn (generic)
+  | 'webauthn-roaming'   // Hardware security keys (YubiKey) - Not yet supported
+  | 'webauthn-platform'; // Platform authenticators (Face ID, Touch ID) - Not yet supported
 
 /**
  * Authentication Method Interface
@@ -437,20 +438,21 @@ export async function getAvailableFactors(): Promise<MFAFactor[]> {
       type: 'passkey',
       enabled: enabledFactors.includes('passkey'),
       name: 'Passkey',
-      description: 'Use passkeys for passwordless authentication',
+      description: 'Cross-device and platform credential using biometrics or security keys',
     },
-    {
-      type: 'webauthn-roaming',
-      enabled: enabledFactors.includes('webauthn-roaming'),
-      name: 'Security Key',
-      description: 'Use a hardware security key like YubiKey or Titan',
-    },
-    {
-      type: 'webauthn-platform',
-      enabled: enabledFactors.includes('webauthn-platform'),
-      name: 'Biometric',
-      description: 'Use Face ID, Touch ID, or Windows Hello',
-    },
+    // WebAuthn types hidden until properly supported
+    // {
+    //   type: 'webauthn-roaming',
+    //   enabled: enabledFactors.includes('webauthn-roaming'),
+    //   name: 'Security Key',
+    //   description: 'Use a hardware security key like YubiKey or Titan',
+    // },
+    // {
+    //   type: 'webauthn-platform',
+    //   enabled: enabledFactors.includes('webauthn-platform'),
+    //   name: 'Biometric',
+    //   description: 'Use Face ID, Touch ID, or Windows Hello',
+    // },
   ];
 
   // Only return enabled factors
