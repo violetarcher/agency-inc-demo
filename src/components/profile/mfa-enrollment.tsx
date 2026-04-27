@@ -134,7 +134,8 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
     const cachedToken = localStorage.getItem('myAccountToken');
     if (cachedToken) {
       setAccessToken(cachedToken);
-      fetchEnrolledMethods();
+      // Pass the token directly since state hasn't updated yet
+      fetchEnrolledMethods(cachedToken);
     }
     // Don't auto-fetch - let user click button when they need MFA management
   }, []);
@@ -243,8 +244,23 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
     try {
       setEnrolledMethodsError(null); // Clear previous errors
 
-      // Use Management API instead of My Account API to avoid 500 errors
-      const response = await fetch('/api/mfa/methods-mgmt');
+      // Use the provided token or the one from state
+      const tokenToUse = token || accessToken;
+
+      if (!tokenToUse) {
+        console.log('⚠️ No My Account API token available, skipping enrolled methods fetch');
+        return;
+      }
+
+      console.log('📋 Fetching enrolled methods from My Account API...');
+
+      // Call My Account API with the token
+      const response = await fetch('/api/mfa/methods', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${tokenToUse}`,
+        },
+      });
 
       if (response.ok) {
         const data = await response.json();
@@ -950,10 +966,20 @@ export function MFAEnrollment({ user }: MFAEnrollmentProps) {
   const handleDeleteMethod = async () => {
     if (!methodToDelete) return;
 
+    if (!accessToken) {
+      toast.error('No token', {
+        description: 'Please get My Account API token first',
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await fetch(`/api/mfa/methods-mgmt/${methodToDelete.id}`, {
+      const response = await fetch(`/api/mfa/methods/${methodToDelete.id}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
       });
 
       const data = await response.json();
