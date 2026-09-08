@@ -21,6 +21,12 @@ export const GET = handleAuth({
       //   authorizationParams.connection = process.env.AUTH0_CONNECTION_ID;
       // }
 
+      // IdP-initiated SSO (e.g. Okta chicklet) forces a specific connection by name
+      const connection = url.searchParams.get('connection');
+      if (connection) {
+        authorizationParams.connection = connection;
+      }
+
       // Configure audience and scopes based on request type
       if (isMyAccount) {
         // My Account API request
